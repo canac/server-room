@@ -1,3 +1,4 @@
+use dialoguer::{theme::ColorfulTheme, Select};
 use serde::{Deserialize, Serialize};
 use std::fs;
 
@@ -20,6 +21,26 @@ fn load_config() -> Config {
     serde_json::from_str(&config).expect("Error parsing JSON string")
 }
 
+// Let the user pick a server from the defined list in the config
+fn pick_server(config: &Config) -> &Server {
+    let server_options: Vec<&String> = config
+        .servers
+        .iter()
+        .map(|server| &server.project_name)
+        .collect();
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick a server")
+        .default(0)
+        .items(&server_options)
+        .interact()
+        .unwrap();
+
+    &config.servers[selection]
+}
+
 fn main() {
-    println!("{:?}", load_config());
+    let config = load_config();
+    let server = pick_server(&config);
+    println!("{:?}", server);
 }
