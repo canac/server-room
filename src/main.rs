@@ -9,27 +9,29 @@ struct Config {
     servers: Vec<Server>,
 }
 
+// Load the configuration from a string
+impl Config {
+    fn load_config() -> Config {
+        // Load the configuration file contents
+        let config = fs::read_to_string("config.json").expect("Error reading configuration");
+        serde_json::from_str(&config).expect("Error parsing JSON string")
+    }
+
+    // Write the configuration to disk
+    fn flush_config(self: &Config) {
+        fs::write(
+            "config.json",
+            serde_json::to_string(self).expect("Error stringifying config to JSON"),
+        )
+        .expect("Error writing configuration")
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Server {
     project_name: String,
     start_command: String,
     run_times: Vec<u128>,
-}
-
-// Load the configuration from a string
-fn load_config() -> Config {
-    // Load the configuration file contents
-    let config = fs::read_to_string("config.json").expect("Error reading configuration");
-    serde_json::from_str(&config).expect("Error parsing JSON string")
-}
-
-// Write the configuration to disk
-fn flush_config(config: &Config) {
-    fs::write(
-        "config.json",
-        serde_json::to_string(config).expect("Error stringifying config to JSON"),
-    )
-    .expect("Error writing configuration")
 }
 
 // Let the user pick a server from the defined list in the config
@@ -51,7 +53,7 @@ fn pick_server(config: &mut Config) -> &mut Server {
 }
 
 fn main() {
-    let mut config = load_config();
+    let mut config = Config::load_config();
     let server = pick_server(&mut config);
 
     // Record another run on this server
@@ -62,5 +64,5 @@ fn main() {
             .as_millis(),
     );
 
-    flush_config(&config);
+    config.flush_config();
 }
