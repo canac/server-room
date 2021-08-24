@@ -51,24 +51,26 @@ impl Server {
 
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
-    // Sort the servers by most-recently-used first
-    let mut mru_servers: Vec<&Server> = config.servers.iter().collect();
-    mru_servers
-        .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
+    // Store the original index along with each server before sorting so that we know each server's index in the
+    // original servers vector after the user picks one
+    let mut mru_servers: Vec<(usize, &Server)> = config.servers.iter().enumerate().collect();
+    mru_servers.sort_by(|(_, server1), (_, server2)| {
+        server1.get_weight().cmp(&server2.get_weight()).reverse()
+    });
 
+    let options = mru_servers
+        .iter()
+        .map(|(_, server)| server)
+        .collect::<Vec<_>>();
     let selected = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick a server")
         .default(0)
-        .items(&mru_servers)
+        .items(&options)
         .interact()
         .unwrap();
 
     // Convert the index in the sorted servers vector into an index in the original servers vector
-    let index = config
-        .servers
-        .iter()
-        .position(|server| server.project_name == mru_servers[selected].project_name)
-        .unwrap();
+    let index = mru_servers[selected].0;
     &mut config.servers[index]
 }
 
