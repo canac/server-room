@@ -1,6 +1,7 @@
 use dialoguer::{theme::ColorfulTheme, Select};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
@@ -12,6 +13,7 @@ struct Config {
 struct Server {
     project_name: String,
     start_command: String,
+    run_times: Vec<u128>,
 }
 
 // Load the configuration from a string
@@ -21,26 +23,44 @@ fn load_config() -> Config {
     serde_json::from_str(&config).expect("Error parsing JSON string")
 }
 
+// Write the configuration to disk
+fn flush_config(config: &Config) {
+    fs::write(
+        "config.json",
+        serde_json::to_string(config).expect("Error stringifying config to JSON"),
+    )
+    .expect("Error writing configuration")
+}
+
 // Let the user pick a server from the defined list in the config
-fn pick_server(config: &Config) -> &Server {
+fn pick_server(config: &mut Config) -> &mut Server {
     let server_options: Vec<&String> = config
         .servers
         .iter()
         .map(|server| &server.project_name)
         .collect();
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
+    let selected = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick a server")
         .default(0)
         .items(&server_options)
         .interact()
         .unwrap();
 
-    &config.servers[selection]
+    &mut config.servers[selected]
 }
 
 fn main() {
-    let config = load_config();
-    let server = pick_server(&config);
-    println!("{:?}", server);
+    let mut config = load_config();
+    let server = pick_server(&mut config);
+
+    // Record another run on this server
+    server.run_times.push(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis(),
+    );
+
+    flush_config(&config);
 }
