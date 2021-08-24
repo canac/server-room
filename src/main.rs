@@ -1,5 +1,6 @@
 use dialoguer::{theme::ColorfulTheme, Select};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -34,22 +35,41 @@ struct Server {
     run_times: Vec<u128>,
 }
 
+impl fmt::Display for Server {
+    fn fmt(self: &Server, formatter: &mut std::fmt::Formatter) -> fmt::Result {
+        write!(formatter, "{}", self.project_name)
+    }
+}
+
+impl Server {
+    // Calculate the likelihood that this server will be used again
+    // Higher values are more likely, lower values are less likely
+    fn get_weight(self: &Server) -> u128 {
+        *self.run_times.last().unwrap_or(&0)
+    }
+}
+
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
-    let server_options: Vec<&String> = config
-        .servers
-        .iter()
-        .map(|server| &server.project_name)
-        .collect();
+    // Sort the servers by most-recently-used first
+    let mut mru_servers: Vec<&Server> = config.servers.iter().collect();
+    mru_servers
+        .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
 
     let selected = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick a server")
         .default(0)
-        .items(&server_options)
+        .items(&mru_servers)
         .interact()
         .unwrap();
 
-    &mut config.servers[selected]
+    // Convert the index in the sorted servers vector into an index in the original servers vector
+    let index = config
+        .servers
+        .iter()
+        .position(|server| server.project_name == mru_servers[selected].project_name)
+        .unwrap();
+    &mut config.servers[index]
 }
 
 fn main() {
