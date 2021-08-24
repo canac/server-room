@@ -22,7 +22,7 @@ impl Config {
     fn flush_config(self: &Config) {
         fs::write(
             "config.json",
-            serde_json::to_string(self).expect("Error stringifying config to JSON"),
+            serde_json::to_string_pretty(self).expect("Error stringifying config to JSON"),
         )
         .expect("Error writing configuration")
     }
