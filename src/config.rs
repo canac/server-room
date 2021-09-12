@@ -12,8 +12,13 @@ impl Config {
     // Load the configuration from a string
     pub fn load_config() -> Config {
         // Load the configuration file contents
-        let config = fs::read_to_string("config.json").expect("Error reading configuration");
-        serde_json::from_str(&config).expect("Error parsing JSON string")
+        let config_str = fs::read_to_string("config.json").expect("Error reading configuration");
+        let mut config: Config =
+            serde_json::from_str(&config_str).expect("Error parsing JSON string");
+        config
+            .servers
+            .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
+        config
     }
 
     // Write the configuration to disk

@@ -14,10 +14,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
-    let mut mru_servers: Vec<&mut Server> = config.servers.iter_mut().collect();
-    mru_servers
-        .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
-    Select::new("Pick a server", mru_servers).prompt().unwrap()
+    Select::new("Pick a server", config.servers.iter_mut().collect())
+        .prompt()
+        .unwrap()
 }
 
 // Add a new server to the config
