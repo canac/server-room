@@ -29,4 +29,10 @@ impl Config {
         )
         .expect("Error writing configuration")
     }
+
+    // Permanently add a new server to the configuration
+    pub fn add_server(self: &mut Config, server: Server) {
+        self.servers.push(server);
+        self.flush_config();
+    }
 }
