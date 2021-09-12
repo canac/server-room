@@ -10,7 +10,6 @@ use clap::{App, Arg, SubCommand};
 use inquire::Select;
 use serde_json::Value;
 use std::fs;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
@@ -36,11 +35,10 @@ fn add_server(config: &mut Config, project_name: &str) {
         let script = Select::new("Pick a start command", scripts)
             .prompt()
             .unwrap();
-        config.servers.push(Server {
-            project_name: project_name.to_string(),
-            start_command: format!("npm run {}", script.name),
-            run_times: vec![],
-        })
+        config.servers.push(Server::new(
+            project_name.to_string(),
+            format!("npm run {}", script.name),
+        ))
     } else {
         panic!("scripts property is not an object");
     }
@@ -88,14 +86,8 @@ fn main() {
             config.flush_config();
         }
         Some("run") => {
-            // Record another run on this server
             let server = pick_server(&mut config);
-            server.run_times.push(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_millis(),
-            );
+            server.start();
             config.flush_config();
         }
         _ => println!("Some other subcommand was used"),
