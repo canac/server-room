@@ -1,66 +1,16 @@
+mod config;
+mod script;
+mod server;
+
+use config::Config;
+use script::Script;
+use server::Server;
+
 use clap::{App, Arg, SubCommand};
 use inquire::Select;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Config {
-    servers_dir: String,
-    servers: Vec<Server>,
-}
-
-// Load the configuration from a string
-impl Config {
-    fn load_config() -> Config {
-        // Load the configuration file contents
-        let config = fs::read_to_string("config.json").expect("Error reading configuration");
-        serde_json::from_str(&config).expect("Error parsing JSON string")
-    }
-
-    // Write the configuration to disk
-    fn flush_config(self: &Config) {
-        fs::write(
-            "config.json",
-            serde_json::to_string_pretty(self).expect("Error stringifying config to JSON"),
-        )
-        .expect("Error writing configuration")
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Server {
-    project_name: String,
-    start_command: String,
-    run_times: Vec<u128>,
-}
-
-impl fmt::Display for Server {
-    fn fmt(self: &Server, formatter: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(formatter, "{}", self.project_name)
-    }
-}
-
-impl Server {
-    // Calculate the likelihood that this server will be used again
-    // Higher values are more likely, lower values are less likely
-    fn get_weight(self: &Server) -> u128 {
-        *self.run_times.last().unwrap_or(&0)
-    }
-}
-
-struct Script {
-    name: String,
-    command: String,
-}
-
-impl fmt::Display for Script {
-    fn fmt(self: &Script, formatter: &mut std::fmt::Formatter) -> fmt::Result {
-        write!(formatter, "{}: {}", self.name, self.command)
-    }
-}
 
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
