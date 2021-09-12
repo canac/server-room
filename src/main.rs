@@ -10,6 +10,64 @@ use clap::{App, Arg, SubCommand};
 use inquire::Select;
 use std::fs;
 
+// Get the project name from the command line argument, falling back to letting the user interactively pick one
+fn get_project_name_from_user(
+    config: &Config,
+    cli_project_name: Option<&str>,
+) -> Result<String, String> {
+    match cli_project_name {
+        Some(project_name) => {
+            // If a project name was provided from the command line, validate it
+            let project_name = project_name.to_string();
+            config.validate_new_project_name(&project_name)?;
+            Ok(project_name)
+        }
+        None => {
+            // If no project name was provided, let the user pick one
+            let projects = fs::read_dir(&config.servers_dir)
+                .map_err(|_| "Error reading servers directory".to_string())?
+                .filter_map(|result| {
+                    if let Ok(dir_entry) = result {
+                        let project_name = dir_entry.file_name().to_str()?.to_string();
+                        if config.validate_new_project_name(&project_name).is_ok() {
+                            return Some(project_name);
+                        }
+                    }
+
+                    None
+                })
+                .collect::<Vec<_>>();
+            Select::new("Pick a project", projects)
+                .prompt()
+                .map_err(|err| err.to_string())
+        }
+    }
+}
+
+// Get the start script name from the command line argument, falling back to letting the user interactively pick one
+fn get_start_script_from_user(
+    config: &Config,
+    project_name: &String,
+    cli_start_script: Option<&str>,
+) -> Result<String, String> {
+    match cli_start_script {
+        Some(start_script) => {
+            // If a start script name was provided from the command line, validate it
+            let start_script = start_script.to_string();
+            config.validate_start_script(&project_name, &start_script)?;
+            Ok(start_script)
+        }
+        None => {
+            // If no start script was provided, let the user pick one
+            let scripts = config.load_project_start_scripts(project_name)?;
+            let start_script = Select::new("Pick a start command", scripts)
+                .prompt()
+                .map_err(|err| err.to_string())?;
+            Ok(format!("npm run {}", start_script.name))
+        }
+    }
+}
+
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
     Select::new("Pick a server", config.servers.iter_mut().collect())
@@ -17,37 +75,7 @@ fn pick_server(config: &mut Config) -> &mut Server {
         .unwrap()
 }
 
-// Pick a new project from the servers directory that isn't a server yet
-fn pick_project(config: &Config) -> String {
-    let projects = fs::read_dir(&config.servers_dir)
-        .expect("Error reading servers directory")
-        .filter_map(|result| {
-            if let Ok(dir_entry) = result {
-                let project_name = dir_entry.file_name().to_str().unwrap().to_string();
-                if config.validate_new_project_name(&project_name).is_ok() {
-                    Some(project_name)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-    Select::new("Pick a project", projects).prompt().unwrap()
-}
-
-// Pick a start script for a particular project
-fn pick_start_script(config: &Config, project_name: &String) -> Script {
-    Select::new(
-        "Pick a start command",
-        config.load_project_start_scripts(project_name).unwrap(),
-    )
-    .prompt()
-    .unwrap()
-}
-
-fn main() {
+fn main() -> Result<(), String> {
     let mut config = Config::load_config();
 
     let matches = App::new("server-room")
@@ -79,30 +107,13 @@ fn main() {
     match matches.subcommand_name() {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
-            let project_name = match options.value_of("project-name") {
-                Some(project_name) => {
-                    let project_name = project_name.to_string();
-                    if let Err(msg) = config.validate_new_project_name(&project_name) {
-                        eprint!("{}", msg);
-                        return;
-                    }
-
-                    project_name
-                }
-                None => pick_project(&config),
-            };
-            let start_script = match options.value_of("start-script") {
-                Some(start_script) => {
-                    let start_script = start_script.to_string();
-                    if let Err(msg) = config.validate_start_script(&project_name, &start_script) {
-                        eprint!("{}", msg);
-                        return;
-                    }
-
-                    start_script
-                }
-                None => format!("npm run {}", pick_start_script(&config, &project_name).name),
-            };
+            let project_name =
+                get_project_name_from_user(&config, options.value_of("project-name"))?;
+            let start_script = get_start_script_from_user(
+                &config,
+                &project_name,
+                options.value_of("start-script"),
+            )?;
             config.add_server(Server::new(project_name, start_script));
         }
         Some("run") => {
@@ -110,6 +121,8 @@ fn main() {
             server.start();
             config.flush_config();
         }
-        _ => println!("Some other subcommand was used"),
-    }
+        _ => return Err("Some other subcommand was used".to_string()),
+    };
+
+    Ok(())
 }
