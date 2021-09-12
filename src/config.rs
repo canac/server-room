@@ -24,7 +24,7 @@ impl Config {
     }
 
     // Write the configuration to disk
-    pub fn flush_config(self: &Config) {
+    pub fn flush_config(&self) {
         fs::write(
             "config.json",
             serde_json::to_string_pretty(self).expect("Error stringifying config to JSON"),
@@ -33,13 +33,13 @@ impl Config {
     }
 
     // Permanently add a new server to the configuration
-    pub fn add_server(self: &mut Config, server: Server) {
+    pub fn add_server(&mut self, server: Server) {
         self.servers.push(server);
         self.flush_config();
     }
 
     // Determine whether the project name refers to a valid new project
-    pub fn validate_new_project_name(self: &Config, project_name: &String) -> Result<(), String> {
+    pub fn validate_new_project_name(&self, project_name: &String) -> Result<(), String> {
         match fs::metadata(format!(
             "{}/{}/package.json",
             self.servers_dir, project_name
@@ -65,10 +65,7 @@ impl Config {
     }
 
     // Return a vector of the project's start scripts
-    pub fn load_project_start_scripts(
-        self: &Config,
-        project_name: &String,
-    ) -> Result<Vec<Script>, String> {
+    pub fn load_project_start_scripts(&self, project_name: &String) -> Result<Vec<Script>, String> {
         let package_json_path = format!("{}/{}/package.json", self.servers_dir, project_name);
         let package_json_content = match fs::read_to_string(package_json_path) {
             Ok(content) => content,
@@ -92,7 +89,7 @@ impl Config {
 
     // Determine whether the start script for a project is valid
     pub fn validate_start_script(
-        self: &Config,
+        &self,
         project_name: &String,
         start_script: &String,
     ) -> Result<(), String> {

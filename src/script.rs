@@ -6,7 +6,7 @@ pub struct Script {
 }
 
 impl fmt::Display for Script {
-    fn fmt(self: &Script, formatter: &mut std::fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> fmt::Result {
         write!(formatter, "{}: {}", self.name, self.command)
     }
 }

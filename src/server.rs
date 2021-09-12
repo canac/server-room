@@ -10,7 +10,7 @@ pub struct Server {
 }
 
 impl fmt::Display for Server {
-    fn fmt(self: &Server, formatter: &mut std::fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> fmt::Result {
         write!(formatter, "{}", self.project_name)
     }
 }
@@ -27,12 +27,12 @@ impl Server {
 
     // Calculate the likelihood that this server will be used again
     // Higher values are more likely, lower values are less likely
-    pub fn get_weight(self: &Server) -> u128 {
+    pub fn get_weight(&self) -> u128 {
         *self.run_times.last().unwrap_or(&0)
     }
 
     // Start up the server
-    pub fn start(self: &mut Server) {
+    pub fn start(&mut self) {
         // Record another run on this server
         self.run_times.push(
             SystemTime::now()
