@@ -3,7 +3,7 @@ use std::fmt;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Server {
     pub project_name: String,
     pub project_dir: String,

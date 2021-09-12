@@ -10,8 +10,8 @@ use clap::{App, Arg, SubCommand};
 use inquire::Select;
 use std::fs;
 
-// Get the project name from the command line argument, falling back to letting the user interactively pick one
-fn get_project_name_from_user(
+// Get the name of a new project from the command line argument, falling back to letting the user interactively pick one
+fn get_new_project_name_from_user(
     config: &Config,
     cli_project_name: Option<&str>,
 ) -> Result<String, String> {
@@ -44,6 +44,32 @@ fn get_project_name_from_user(
     }
 }
 
+// Get an existing server from the command line argument, falling back to letting the user interactively pick one
+fn get_existing_server_from_user<'a>(
+    config: &'a mut Config,
+    cli_project_name: Option<&str>,
+) -> Result<&'a mut Server, String> {
+    match cli_project_name {
+        Some(project_name) => {
+            // If a server was provided from the command line, validate it
+            config
+                .servers
+                .get_mut(&project_name.to_string())
+                .ok_or(format!("Server \"{}\" does not exist", project_name))
+        }
+        None => {
+            // If no server was provided, let the user pick one
+            let mut servers = config.servers.values_mut().collect::<Vec<_>>();
+            servers.sort_by(|server1, server2| {
+                server1.get_weight().cmp(&server2.get_weight()).reverse()
+            });
+            Select::new("Pick a server", servers)
+                .prompt()
+                .map_err(|err| err.to_string())
+        }
+    }
+}
+
 // Get the start script name from the command line argument, falling back to letting the user interactively pick one
 fn get_start_script_from_user(
     config: &Config,
@@ -66,13 +92,6 @@ fn get_start_script_from_user(
             Ok(format!("npm run {}", start_script.name))
         }
     }
-}
-
-// Let the user pick a server from the defined list in the config
-fn pick_server(config: &mut Config) -> &mut Server {
-    Select::new("Pick a server", config.servers.iter_mut().collect())
-        .prompt()
-        .unwrap()
 }
 
 fn main() -> Result<(), String> {
@@ -101,14 +120,22 @@ fn main() -> Result<(), String> {
                         .requires("project-name"),
                 ),
         )
-        .subcommand(SubCommand::with_name("run").about("run a server"))
+        .subcommand(
+            SubCommand::with_name("run").about("run a server").arg(
+                Arg::with_name("server")
+                    .help("Specifies the server to run")
+                    .takes_value(true)
+                    .short("s")
+                    .long("server"),
+            ),
+        )
         .get_matches();
 
     match matches.subcommand_name() {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
             let project_name =
-                get_project_name_from_user(&config, options.value_of("project-name"))?;
+                get_new_project_name_from_user(&config, options.value_of("project-name"))?;
             let start_script = get_start_script_from_user(
                 &config,
                 &project_name,
@@ -117,12 +144,13 @@ fn main() -> Result<(), String> {
             config.add_server(project_name, start_script);
         }
         Some("run") => {
-            let server = pick_server(&mut config);
+            let options = matches.subcommand_matches("run").unwrap();
+            let server = get_existing_server_from_user(&mut config, options.value_of("server"))?;
             server.start();
             config.flush_config();
         }
         _ => return Err("Some other subcommand was used".to_string()),
-    };
+    }
 
     Ok(())
 }

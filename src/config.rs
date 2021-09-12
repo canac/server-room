@@ -4,10 +4,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 
+// This struct represents the config structure in the raw JSON file
 #[derive(Serialize, Deserialize)]
-pub struct Config {
+struct RawConfig {
     pub servers_dir: String,
     pub servers: Vec<Server>,
+}
+
+// This struct represents the config that is used by the rest of the application
+pub struct Config {
+    pub servers_dir: String,
+    pub servers: std::collections::HashMap<String, Server>,
 }
 
 impl Config {
@@ -15,19 +22,28 @@ impl Config {
     pub fn load_config() -> Config {
         // Load the configuration file contents
         let config_str = fs::read_to_string("config.json").expect("Error reading configuration");
-        let mut config: Config =
+        let raw_config: RawConfig =
             serde_json::from_str(&config_str).expect("Error parsing JSON string");
-        config
-            .servers
-            .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
-        config
+        Config {
+            servers_dir: raw_config.servers_dir,
+            // Build the servers map where servers are indexed by their project name from the servers vector
+            servers: raw_config
+                .servers
+                .into_iter()
+                .map(|server| (server.project_name.clone(), server))
+                .collect(),
+        }
     }
 
     // Write the configuration to disk
     pub fn flush_config(&self) {
+        let raw_config = RawConfig {
+            servers_dir: self.servers_dir.clone(),
+            servers: self.servers.clone().into_values().collect(),
+        };
         fs::write(
             "config.json",
-            serde_json::to_string_pretty(self).expect("Error stringifying config to JSON"),
+            serde_json::to_string_pretty(&raw_config).expect("Error stringifying config to JSON"),
         )
         .expect("Error writing configuration")
     }
@@ -35,8 +51,11 @@ impl Config {
     // Permanently add a new server to the configuration
     pub fn add_server(&mut self, project_name: String, start_command: String) {
         let project_dir = format!("{}/{}", self.servers_dir, project_name);
-        self.servers
-            .push(Server::new(project_name, project_dir, start_command));
+        let server_key = project_name.clone();
+        self.servers.insert(
+            server_key,
+            Server::new(project_name, project_dir, start_command),
+        );
         self.flush_config();
     }
 
@@ -51,12 +70,7 @@ impl Config {
                     return Err("Project package.json is not a file".to_string());
                 }
 
-                if self
-                    .servers
-                    .iter()
-                    .find(|server| &server.project_name == project_name)
-                    .is_some()
-                {
+                if self.servers.contains_key(project_name) {
                     return Err("Project already exists".to_string());
                 }
             }
