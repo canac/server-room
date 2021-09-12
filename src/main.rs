@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
                 &project_name,
                 options.value_of("start-script"),
             )?;
-            config.add_server(Server::new(project_name, start_script));
+            config.add_server(project_name, start_script);
         }
         Some("run") => {
             let server = pick_server(&mut config);

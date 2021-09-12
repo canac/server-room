@@ -33,8 +33,10 @@ impl Config {
     }
 
     // Permanently add a new server to the configuration
-    pub fn add_server(&mut self, server: Server) {
-        self.servers.push(server);
+    pub fn add_server(&mut self, project_name: String, start_command: String) {
+        let project_dir = format!("{}/{}", self.servers_dir, project_name);
+        self.servers
+            .push(Server::new(project_name, project_dir, start_command));
         self.flush_config();
     }
 

@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Serialize, Deserialize)]
 pub struct Server {
     pub project_name: String,
+    pub project_dir: String,
     pub start_command: String,
     run_times: Vec<u128>,
 }
@@ -17,9 +18,10 @@ impl fmt::Display for Server {
 
 impl Server {
     // Create a new server
-    pub fn new(project_name: String, start_command: String) -> Self {
+    pub fn new(project_name: String, project_dir: String, start_command: String) -> Self {
         Server {
             project_name,
+            project_dir,
             start_command,
             run_times: vec![],
         }
