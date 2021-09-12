@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize)]
@@ -42,5 +43,12 @@ impl Server {
                 .expect("Time went backwards")
                 .as_millis(),
         );
+
+        // Execute the server's start command, sending input and output to stdin and stdout
+        Command::new("sh")
+            .args(["-c", self.start_command.as_str()])
+            .current_dir(self.project_dir.as_str())
+            .status()
+            .expect(format!("Failed to execute \"{}\" start command", self.start_command).as_str());
     }
 }
