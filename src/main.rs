@@ -1,5 +1,5 @@
 use clap::{App, Arg, SubCommand};
-use dialoguer::{theme::ColorfulTheme, Select};
+use inquire::Select;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -51,29 +51,23 @@ impl Server {
     }
 }
 
+struct Script {
+    name: String,
+    command: String,
+}
+
+impl fmt::Display for Script {
+    fn fmt(self: &Script, formatter: &mut std::fmt::Formatter) -> fmt::Result {
+        write!(formatter, "{}: {}", self.name, self.command)
+    }
+}
+
 // Let the user pick a server from the defined list in the config
 fn pick_server(config: &mut Config) -> &mut Server {
-    // Store the original index along with each server before sorting so that we know each server's index in the
-    // original servers vector after the user picks one
-    let mut mru_servers: Vec<(usize, &Server)> = config.servers.iter().enumerate().collect();
-    mru_servers.sort_by(|(_, server1), (_, server2)| {
-        server1.get_weight().cmp(&server2.get_weight()).reverse()
-    });
-
-    let options = mru_servers
-        .iter()
-        .map(|(_, server)| server)
-        .collect::<Vec<_>>();
-    let selected = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick a server")
-        .default(0)
-        .items(&options)
-        .interact()
-        .unwrap();
-
-    // Convert the index in the sorted servers vector into an index in the original servers vector
-    let index = mru_servers[selected].0;
-    &mut config.servers[index]
+    let mut mru_servers: Vec<&mut Server> = config.servers.iter_mut().collect();
+    mru_servers
+        .sort_by(|server1, server2| server1.get_weight().cmp(&server2.get_weight()).reverse());
+    Select::new("Pick a server", mru_servers).prompt().unwrap()
 }
 
 // Add a new server to the config
@@ -82,21 +76,20 @@ fn add_server(config: &mut Config, project_name: &str) {
     let package_json_content =
         fs::read_to_string(package_json_path).expect("Error reading package.json");
     let package_json: Value = serde_json::from_str(&package_json_content).unwrap();
-    if let Value::Object(scripts) = &package_json["scripts"] {
-        let script_names = scripts.iter().map(|(key, _)| key).collect::<Vec<_>>();
-        let options = scripts
+    if let Value::Object(scripts_json) = &package_json["scripts"] {
+        let scripts = scripts_json
             .iter()
-            .map(|(key, value)| format!("{}: {}", key, value))
+            .map(|(name, command)| Script {
+                name: name.to_string(),
+                command: command.to_string(),
+            })
             .collect::<Vec<_>>();
-        let selected = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt("Pick a start command")
-            .default(0)
-            .items(&options)
-            .interact()
+        let script = Select::new("Pick a start command", scripts)
+            .prompt()
             .unwrap();
         config.servers.push(Server {
             project_name: project_name.to_string(),
-            start_command: format!("npm run {}", script_names[selected]),
+            start_command: format!("npm run {}", script.name),
             run_times: vec![],
         })
     } else {
