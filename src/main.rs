@@ -71,28 +71,30 @@ fn get_existing_server_from_user<'a>(
     }
 }
 
-// Get the start script name from the command line argument, falling back to letting the user interactively pick one
-fn get_start_script_from_user(
+// Get the start command from the script name command line argument, falling back to letting the user interactively pick one
+fn get_start_command_from_user(
     config: &Config,
     project_name: &str,
     cli_start_script: Option<&str>,
+    prompt: &str,
 ) -> Result<String, String> {
-    match cli_start_script {
+    let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
             let start_script = start_script.to_string();
             config.validate_start_script(project_name, &start_script)?;
-            Ok(start_script)
+            start_script
         }
         None => {
             // If no start script was provided, let the user pick one
             let scripts = config.load_project_start_scripts(project_name)?;
-            let start_script = Select::new("Pick a start command", scripts)
+            let start_script = Select::new(prompt, scripts)
                 .prompt()
                 .map_err(|err| err.to_string())?;
-            Ok(format!("npm run {}", start_script.name))
+            start_script.name
         }
-    }
+    };
+    Ok(format!("npm run {}", start_script))
 }
 
 fn main() -> Result<(), String> {
@@ -119,6 +121,24 @@ fn main() -> Result<(), String> {
                         .short("s")
                         .long("start-script")
                         .requires("project-name"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("edit")
+                .about("edit a server's start script")
+                .arg(
+                    Arg::with_name("server")
+                        .help("Specifies the server to edit")
+                        .takes_value(true)
+                        .short("s")
+                        .long("server"),
+                )
+                .arg(
+                    Arg::with_name("start-script")
+                        .help("Sets the server's new start script")
+                        .takes_value(true)
+                        .long("start-script")
+                        .requires("server"),
                 ),
         )
         .subcommand(
@@ -149,12 +169,28 @@ fn main() -> Result<(), String> {
             let options = matches.subcommand_matches("add").unwrap();
             let project_name =
                 get_new_project_name_from_user(&config, options.value_of("project-name"))?;
-            let start_script = get_start_script_from_user(
+            let start_command = get_start_command_from_user(
                 &config,
                 &project_name,
                 options.value_of("start-script"),
+                "Pick a start script",
             )?;
-            config.add_server(project_name, start_script);
+            config.add_server(project_name, start_command);
+        }
+        Some("edit") => {
+            let options = matches.subcommand_matches("edit").unwrap();
+            let server = get_existing_server_from_user(
+                &config,
+                options.value_of("server"),
+                "Pick a server to edit",
+            )?;
+            let start_command = get_start_command_from_user(
+                &config,
+                &server.project_name,
+                options.value_of("start-script"),
+                "Pick a new start script",
+            )?;
+            config.set_server_start_command(&server.project_name, start_command);
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();

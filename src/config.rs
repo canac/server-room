@@ -91,6 +91,17 @@ impl Config {
         new_config.flush_config();
     }
 
+    // Permanently set the start command of the specified server
+    pub fn set_server_start_command(&self, server_name: &str, start_command: String) {
+        let mut new_config = self.clone();
+        new_config
+            .servers
+            .get_mut(server_name)
+            .unwrap_or_else(|| panic!("Invalid server name {}", server_name))
+            .start_command = start_command;
+        new_config.flush_config();
+    }
+
     // Permanently record a new start time
     pub fn record_server_run(&self, project_name: &str) {
         let mut new_config = self.clone();
