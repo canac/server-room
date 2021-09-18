@@ -8,7 +8,9 @@ use server::Server;
 
 use clap::{App, Arg, SubCommand};
 use inquire::Select;
+use std::collections::HashSet;
 use std::fs;
+use std::iter::FromIterator;
 
 // Get the name of a new project from the command line argument, falling back to letting the user interactively pick one
 fn get_new_project_name_from_user(
@@ -87,7 +89,16 @@ fn get_start_command_from_user(
         }
         None => {
             // If no start script was provided, let the user pick one
-            let scripts = config.load_project_start_scripts(project_name)?;
+            let mut scripts = config.load_project_start_scripts(project_name)?;
+            let priority_scripts = HashSet::<&&str>::from_iter(["dev", "run", "start"].iter());
+            // Sort the scripts by name, but put priority scripts first
+            scripts.sort_by(|script1, script2| {
+                priority_scripts
+                    .contains(&script1.name.as_str())
+                    .cmp(&priority_scripts.contains(&script2.name.as_str()))
+                    .reverse()
+                    .then_with(|| script1.name.cmp(&script2.name))
+            });
             let start_script = Select::new(prompt, scripts)
                 .prompt()
                 .map_err(|err| err.to_string())?;
