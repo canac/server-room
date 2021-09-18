@@ -48,6 +48,7 @@ fn get_new_project_name_from_user(
 fn get_existing_server_from_user<'a>(
     config: &'a Config,
     cli_project_name: Option<&str>,
+    prompt: &str,
 ) -> Result<&'a Server, String> {
     match cli_project_name {
         Some(project_name) => {
@@ -63,7 +64,7 @@ fn get_existing_server_from_user<'a>(
             servers.sort_by(|server1, server2| {
                 server1.get_weight().cmp(&server2.get_weight()).reverse()
             });
-            Select::new("Pick a server", servers)
+            Select::new(prompt, servers)
                 .prompt()
                 .map_err(|err| err.to_string())
         }
@@ -129,6 +130,18 @@ fn main() -> Result<(), String> {
                     .long("server"),
             ),
         )
+        .subcommand(
+            SubCommand::with_name("remove")
+                .about("remove a server")
+                .alias("rm")
+                .arg(
+                    Arg::with_name("server")
+                        .help("Specifies the server to remove")
+                        .takes_value(true)
+                        .short("s")
+                        .long("server"),
+                ),
+        )
         .get_matches();
 
     match matches.subcommand_name() {
@@ -145,8 +158,21 @@ fn main() -> Result<(), String> {
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();
-            let server = get_existing_server_from_user(&config, options.value_of("server"))?;
+            let server = get_existing_server_from_user(
+                &config,
+                options.value_of("server"),
+                "Pick a server to run",
+            )?;
             server.start(&config);
+        }
+        Some("remove") => {
+            let options = matches.subcommand_matches("remove").unwrap();
+            let server = get_existing_server_from_user(
+                &config,
+                options.value_of("server"),
+                "Pick a server to remove",
+            )?;
+            config.remove_server(server);
         }
         _ => return Err("Some other subcommand was used".to_string()),
     }

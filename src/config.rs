@@ -108,6 +108,13 @@ impl Config {
         new_config.flush_config();
     }
 
+    // Permanently remove the server from the configuration
+    pub fn remove_server(&self, server: &Server) {
+        let mut new_config = self.clone();
+        new_config.servers.remove(&server.project_name);
+        new_config.flush_config();
+    }
+
     // Determine whether the project name refers to a valid new project
     pub fn validate_new_project_name(&self, project_name: &str) -> Result<(), String> {
         match fs::metadata(format!(
