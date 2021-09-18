@@ -56,7 +56,7 @@ impl Config {
 
     // Write the configuration to disk
     pub fn flush_config(&self) {
-        let raw_config = RawConfig {
+        let mut raw_config = RawConfig {
             servers_dir: self.servers_dir.clone(),
             servers: self
                 .servers
@@ -69,6 +69,10 @@ impl Config {
                 })
                 .collect(),
         };
+        // Sort the servers lexicographically by the project name
+        raw_config
+            .servers
+            .sort_by(|server1, server2| server1.project_name.cmp(&server2.project_name));
         fs::write(
             "config.json",
             serde_json::to_string_pretty(&raw_config).expect("Error stringifying config to JSON"),
