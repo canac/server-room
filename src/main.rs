@@ -46,20 +46,20 @@ fn get_new_project_name_from_user(
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
 fn get_existing_server_from_user<'a>(
-    config: &'a mut Config,
+    config: &'a Config,
     cli_project_name: Option<&str>,
-) -> Result<&'a mut Server, String> {
+) -> Result<&'a Server, String> {
     match cli_project_name {
         Some(project_name) => {
             // If a server was provided from the command line, validate it
             config
                 .servers
-                .get_mut(&project_name.to_string())
+                .get(&project_name.to_string())
                 .ok_or(format!("Server \"{}\" does not exist", project_name))
         }
         None => {
             // If no server was provided, let the user pick one
-            let mut servers = config.servers.values_mut().collect::<Vec<_>>();
+            let mut servers = config.servers.values().collect::<Vec<_>>();
             servers.sort_by(|server1, server2| {
                 server1.get_weight().cmp(&server2.get_weight()).reverse()
             });
@@ -95,7 +95,7 @@ fn get_start_script_from_user(
 }
 
 fn main() -> Result<(), String> {
-    let mut config = Config::load_config();
+    let config = Config::load_config();
 
     let matches = App::new("server-room")
         .version("0.1.0")
@@ -145,9 +145,8 @@ fn main() -> Result<(), String> {
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();
-            let server = get_existing_server_from_user(&mut config, options.value_of("server"))?;
-            server.start();
-            config.flush_config();
+            let server = get_existing_server_from_user(&config, options.value_of("server"))?;
+            server.start(&config);
         }
         _ => return Err("Some other subcommand was used".to_string()),
     }

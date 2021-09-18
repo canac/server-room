@@ -1,14 +1,14 @@
-use serde::{Deserialize, Serialize};
+use super::Config;
 use std::fmt;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct Server {
     pub project_name: String,
     pub project_dir: String,
     pub start_command: String,
-    run_times: Vec<u128>,
+    pub run_times: Vec<u128>,
 }
 
 impl fmt::Display for Server {
@@ -35,14 +35,21 @@ impl Server {
     }
 
     // Start up the server
-    pub fn start(&mut self) {
+    pub fn start(&self, config: &Config) {
         // Record another run on this server
-        self.run_times.push(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_millis(),
-        );
+        let mut new_config = config.clone();
+        new_config
+            .servers
+            .get_mut(&self.project_name)
+            .unwrap()
+            .run_times
+            .push(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_millis(),
+            );
+        new_config.flush_config();
 
         // Execute the server's start command, sending input and output to stdin and stdout
         Command::new("sh")

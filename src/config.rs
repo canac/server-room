@@ -1,17 +1,24 @@
-use super::Script;
-use super::Server;
+use super::{Script, Server};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
+
+#[derive(Serialize, Deserialize)]
+struct RawServer {
+    pub project_name: String,
+    pub start_command: String,
+    run_times: Vec<u128>,
+}
 
 // This struct represents the config structure in the raw JSON file
 #[derive(Serialize, Deserialize)]
 struct RawConfig {
     pub servers_dir: String,
-    pub servers: Vec<Server>,
+    pub servers: Vec<RawServer>,
 }
 
 // This struct represents the config that is used by the rest of the application
+#[derive(Clone)]
 pub struct Config {
     pub servers_dir: String,
     pub servers: std::collections::HashMap<String, Server>,
@@ -24,13 +31,24 @@ impl Config {
         let config_str = fs::read_to_string("config.json").expect("Error reading configuration");
         let raw_config: RawConfig =
             serde_json::from_str(&config_str).expect("Error parsing JSON string");
+        let servers_dir = &raw_config.servers_dir;
         Config {
-            servers_dir: raw_config.servers_dir,
+            servers_dir: servers_dir.clone(),
             // Build the servers map where servers are indexed by their project name from the servers vector
             servers: raw_config
                 .servers
                 .into_iter()
-                .map(|server| (server.project_name.clone(), server))
+                .map(|server| {
+                    (
+                        server.project_name.clone(),
+                        Server {
+                            project_name: server.project_name.clone(),
+                            project_dir: format!("{}/{}", servers_dir, server.project_name),
+                            start_command: server.start_command,
+                            run_times: server.run_times,
+                        },
+                    )
+                })
                 .collect(),
         }
     }
@@ -39,7 +57,16 @@ impl Config {
     pub fn flush_config(&self) {
         let raw_config = RawConfig {
             servers_dir: self.servers_dir.clone(),
-            servers: self.servers.clone().into_values().collect(),
+            servers: self
+                .servers
+                .clone()
+                .into_values()
+                .map(|server| RawServer {
+                    project_name: server.project_name,
+                    start_command: server.start_command,
+                    run_times: server.run_times,
+                })
+                .collect(),
         };
         fs::write(
             "config.json",
@@ -49,14 +76,15 @@ impl Config {
     }
 
     // Permanently add a new server to the configuration
-    pub fn add_server(&mut self, project_name: String, start_command: String) {
+    pub fn add_server(&self, project_name: String, start_command: String) {
+        let mut new_config = self.clone();
         let project_dir = format!("{}/{}", self.servers_dir, project_name);
         let server_key = project_name.clone();
-        self.servers.insert(
+        new_config.servers.insert(
             server_key,
             Server::new(project_name, project_dir, start_command),
         );
-        self.flush_config();
+        new_config.flush_config();
     }
 
     // Determine whether the project name refers to a valid new project
