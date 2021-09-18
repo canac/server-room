@@ -186,11 +186,11 @@ fn main() -> Result<(), String> {
             )?;
             let start_command = get_start_command_from_user(
                 &config,
-                &server.project_name,
+                &server.name,
                 options.value_of("start-script"),
                 "Pick a new start script",
             )?;
-            config.set_server_start_command(&server.project_name, start_command);
+            config.set_server_start_command(&server.name, start_command);
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();

@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize)]
 struct RawServer {
-    pub project_name: String,
+    pub name: String,
     pub start_command: String,
     run_times: Vec<u128>,
 }
@@ -41,10 +41,10 @@ impl Config {
                 .into_iter()
                 .map(|server| {
                     (
-                        server.project_name.clone(),
+                        server.name.clone(),
                         Server {
-                            project_name: server.project_name.clone(),
-                            project_dir: format!("{}/{}", servers_dir, server.project_name),
+                            name: server.name.clone(),
+                            project_dir: format!("{}/{}", servers_dir, server.name),
                             start_command: server.start_command,
                             run_times: server.run_times,
                         },
@@ -63,16 +63,16 @@ impl Config {
                 .clone()
                 .into_values()
                 .map(|server| RawServer {
-                    project_name: server.project_name,
+                    name: server.name,
                     start_command: server.start_command,
                     run_times: server.run_times,
                 })
                 .collect(),
         };
-        // Sort the servers lexicographically by the project name
+        // Sort the servers lexicographically by their name
         raw_config
             .servers
-            .sort_by(|server1, server2| server1.project_name.cmp(&server2.project_name));
+            .sort_by(|server1, server2| server1.name.cmp(&server2.name));
         fs::write(
             "config.json",
             serde_json::to_string_pretty(&raw_config).expect("Error stringifying config to JSON"),
@@ -103,12 +103,12 @@ impl Config {
     }
 
     // Permanently record a new start time
-    pub fn record_server_run(&self, project_name: &str) {
+    pub fn record_server_run(&self, server_name: &str) {
         let mut new_config = self.clone();
         new_config
             .servers
-            .get_mut(project_name)
-            .unwrap_or_else(|| panic!("Invalid project name {}", project_name))
+            .get_mut(server_name)
+            .unwrap_or_else(|| panic!("Invalid server name {}", server_name))
             .run_times
             .push(
                 SystemTime::now()
@@ -122,7 +122,7 @@ impl Config {
     // Permanently remove the server from the configuration
     pub fn remove_server(&self, server: &Server) {
         let mut new_config = self.clone();
-        new_config.servers.remove(&server.project_name);
+        new_config.servers.remove(&server.name);
         new_config.flush_config();
     }
 
