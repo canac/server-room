@@ -73,14 +73,14 @@ fn get_existing_server_from_user<'a>(
 // Get the start script name from the command line argument, falling back to letting the user interactively pick one
 fn get_start_script_from_user(
     config: &Config,
-    project_name: &String,
+    project_name: &str,
     cli_start_script: Option<&str>,
 ) -> Result<String, String> {
     match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
             let start_script = start_script.to_string();
-            config.validate_start_script(&project_name, &start_script)?;
+            config.validate_start_script(project_name, &start_script)?;
             Ok(start_script)
         }
         None => {

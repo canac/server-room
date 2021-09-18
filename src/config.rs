@@ -88,12 +88,12 @@ impl Config {
     }
 
     // Permanently record a new start time
-    pub fn record_server_run(&self, project_name: &String) {
+    pub fn record_server_run(&self, project_name: &str) {
         let mut new_config = self.clone();
         new_config
             .servers
             .get_mut(project_name)
-            .expect(format!("Invalid project name {}", project_name).as_str())
+            .unwrap_or_else(|| panic!("Invalid project name {}", project_name))
             .run_times
             .push(
                 SystemTime::now()
@@ -105,7 +105,7 @@ impl Config {
     }
 
     // Determine whether the project name refers to a valid new project
-    pub fn validate_new_project_name(&self, project_name: &String) -> Result<(), String> {
+    pub fn validate_new_project_name(&self, project_name: &str) -> Result<(), String> {
         match fs::metadata(format!(
             "{}/{}/package.json",
             self.servers_dir, project_name
@@ -126,7 +126,7 @@ impl Config {
     }
 
     // Return a vector of the project's start scripts
-    pub fn load_project_start_scripts(&self, project_name: &String) -> Result<Vec<Script>, String> {
+    pub fn load_project_start_scripts(&self, project_name: &str) -> Result<Vec<Script>, String> {
         let package_json_path = format!("{}/{}/package.json", self.servers_dir, project_name);
         let package_json_content = match fs::read_to_string(package_json_path) {
             Ok(content) => content,
@@ -144,22 +144,18 @@ impl Config {
                     command: command.to_string(),
                 })
                 .collect::<Vec<_>>()),
-            _ => return Err("scripts property is not an object".to_string()),
+            _ => Err("scripts property is not an object".to_string()),
         }
     }
 
     // Determine whether the start script for a project is valid
     pub fn validate_start_script(
         &self,
-        project_name: &String,
-        start_script: &String,
+        project_name: &str,
+        start_script: &str,
     ) -> Result<(), String> {
         let scripts = self.load_project_start_scripts(project_name)?;
-        if scripts
-            .iter()
-            .find(|script| &script.name == start_script)
-            .is_none()
-        {
+        if !scripts.iter().any(|script| script.name == start_script) {
             return Err("Start script doesn't exist".to_string());
         }
 

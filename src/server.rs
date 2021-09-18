@@ -43,6 +43,8 @@ impl Server {
             .args(["-c", self.start_command.as_str()])
             .current_dir(self.project_dir.as_str())
             .status()
-            .expect(format!("Failed to execute \"{}\" start command", self.start_command).as_str());
+            .unwrap_or_else(|_| {
+                panic!("Failed to execute \"{}\" start command", self.start_command)
+            });
     }
 }
