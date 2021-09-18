@@ -2,6 +2,7 @@ use super::{Script, Server};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize)]
 struct RawServer {
@@ -79,11 +80,27 @@ impl Config {
     pub fn add_server(&self, project_name: String, start_command: String) {
         let mut new_config = self.clone();
         let project_dir = format!("{}/{}", self.servers_dir, project_name);
-        let server_key = project_name.clone();
         new_config.servers.insert(
-            server_key,
+            project_name.clone(),
             Server::new(project_name, project_dir, start_command),
         );
+        new_config.flush_config();
+    }
+
+    // Permanently record a new start time
+    pub fn record_server_run(&self, project_name: &String) {
+        let mut new_config = self.clone();
+        new_config
+            .servers
+            .get_mut(project_name)
+            .expect(format!("Invalid project name {}", project_name).as_str())
+            .run_times
+            .push(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_millis(),
+            );
         new_config.flush_config();
     }
 

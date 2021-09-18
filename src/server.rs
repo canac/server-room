@@ -1,7 +1,6 @@
 use super::Config;
 use std::fmt;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
 pub struct Server {
@@ -37,19 +36,7 @@ impl Server {
     // Start up the server
     pub fn start(&self, config: &Config) {
         // Record another run on this server
-        let mut new_config = config.clone();
-        new_config
-            .servers
-            .get_mut(&self.project_name)
-            .unwrap()
-            .run_times
-            .push(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_millis(),
-            );
-        new_config.flush_config();
+        config.record_server_run(&self.project_name);
 
         // Execute the server's start command, sending input and output to stdin and stdout
         Command::new("sh")
