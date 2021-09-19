@@ -26,7 +26,7 @@ fn get_new_project_name_from_user(
         }
         None => {
             // If no project name was provided, let the user pick one
-            let projects = fs::read_dir(&config.servers_dir)
+            let mut projects = fs::read_dir(&config.servers_dir)
                 .map_err(|_| "Error reading servers directory".to_string())?
                 .filter_map(|result| {
                     if let Ok(dir_entry) = result {
@@ -39,6 +39,7 @@ fn get_new_project_name_from_user(
                     None
                 })
                 .collect::<Vec<_>>();
+            projects.sort();
             Select::new("Pick a project", projects)
                 .prompt()
                 .map_err(|err| err.to_string())
