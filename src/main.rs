@@ -220,6 +220,9 @@ fn main() -> Result<(), String> {
             )?;
             config.remove_server(server);
         }
+        None => {
+            return Err("No command was provided".to_string());
+        }
         _ => return Err("Some other subcommand was used".to_string()),
     }
 
