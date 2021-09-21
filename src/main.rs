@@ -64,7 +64,8 @@ fn get_existing_server_from_user<'a>(
         None => {
             // If no server was provided, let the user pick one
             let mut servers = config.servers.values().collect::<Vec<_>>();
-            servers.sort_by_key(|server| !server.get_weight());
+            // Put the servers with the highest weight first
+            servers.sort_by(|server1, server2| server1.get_weight().partial_cmp(&server2.get_weight()).unwrap().reverse());
             Select::new(prompt, servers)
                 .prompt()
                 .map_err(|err| err.to_string())

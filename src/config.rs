@@ -1,6 +1,7 @@
 use super::{Script, Server};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::f64::consts::LN_2;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -8,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 struct RawServer {
     pub name: String,
     pub start_command: String,
-    run_times: Vec<u128>,
+    frecency: f64,
 }
 
 // This struct represents the config structure in the raw JSON file
@@ -46,7 +47,7 @@ impl Config {
                             name: server.name.clone(),
                             project_dir: format!("{}/{}", servers_dir, server.name),
                             start_command: server.start_command,
-                            run_times: server.run_times,
+                            frecency: server.frecency,
                         },
                     )
                 })
@@ -65,7 +66,7 @@ impl Config {
                 .map(|server| RawServer {
                     name: server.name,
                     start_command: server.start_command,
-                    run_times: server.run_times,
+                    frecency: server.frecency,
                 })
                 .collect(),
         };
@@ -105,17 +106,23 @@ impl Config {
     // Permanently record a new start time
     pub fn record_server_run(&self, server_name: &str) {
         let mut new_config = self.clone();
-        new_config
+        let server = new_config
             .servers
             .get_mut(server_name)
-            .unwrap_or_else(|| panic!("Invalid server name {}", server_name))
-            .run_times
-            .push(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_millis(),
-            );
+            .unwrap_or_else(|| panic!("Invalid server name {}", server_name));
+
+        // Uses the frecency algorithm described here https://wiki.mozilla.org/User:Jesse/NewFrecency
+        const FRECENCY_HALF_LIFE_MICROS: f64 = 30f64 * 24f64 * 60f64 * 60f64 * 1_000_000f64; // one month
+        const DECAY: f64 = LN_2 / FRECENCY_HALF_LIFE_MICROS as f64;
+        const SCORE_INCREASE_PER_RUN: f64 = 1f64;
+        let now_decay = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_micros() as f64
+            * DECAY;
+        let score = (server.frecency - now_decay).exp();
+        let new_score = score + SCORE_INCREASE_PER_RUN;
+        server.frecency = new_score.ln() + now_decay;
         new_config.flush_config();
     }
 

@@ -7,7 +7,7 @@ pub struct Server {
     pub name: String,
     pub project_dir: String,
     pub start_command: String,
-    pub run_times: Vec<u128>,
+    pub frecency: f64,
 }
 
 impl fmt::Display for Server {
@@ -23,14 +23,14 @@ impl Server {
             name,
             project_dir,
             start_command,
-            run_times: vec![],
+            frecency: 0f64,
         }
     }
 
     // Calculate the likelihood that this server will be used again
     // Higher values are more likely, lower values are less likely
-    pub fn get_weight(&self) -> u128 {
-        *self.run_times.last().unwrap_or(&0)
+    pub fn get_weight(&self) -> f64 {
+        self.frecency
     }
 
     // Start up the server
