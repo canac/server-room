@@ -33,6 +33,8 @@ pub enum ErrorCode {
     MissingStartScript,
     NonExistentServer,
     DuplicateProject,
+    NoNewServers,
+    NoServers,
     InquireError,
     InvalidCommand,
 }

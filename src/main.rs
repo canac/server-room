@@ -47,6 +47,18 @@ fn get_new_project_name_from_user(
                 })
                 .collect::<Vec<_>>();
             projects.sort();
+
+            if projects.is_empty() {
+                return Err(ActionableError {
+                    code: ErrorCode::NoNewServers,
+                    message: format!(
+                        "Servers directory {} contains only servers that have already been added",
+                        config.servers_dir
+                    ),
+                    suggestion: "Try creating a new server first.".to_string(),
+                });
+            }
+
             Select::new("Pick a project", projects)
                 .prompt()
                 .map_err(ActionableError::from)
@@ -91,6 +103,15 @@ fn get_existing_server_from_user<'a>(
                     .unwrap()
                     .reverse()
             });
+
+            if servers.is_empty() {
+                return Err(ActionableError {
+                    code: ErrorCode::NoServers,
+                    message: "No servers have been added yet".to_string(),
+                    suggestion: "Try adding a new server first.\n\n    server-room add".to_string(),
+                });
+            }
+
             Select::new(prompt, servers)
                 .prompt()
                 .map_err(ActionableError::from)

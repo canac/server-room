@@ -190,10 +190,12 @@ impl Config {
                 message: format!("Could not parse {}", package_json_path),
                 suggestion: "Try making sure that package.json contains valid JSON.".to_string(),
             })?;
-        let scripts = package_json["scripts"].as_object().ok_or_else(|| ActionableError {
+        let scripts = package_json["scripts"].as_object().and_then(|scripts| {
+            if scripts.is_empty() { None } else { Some(scripts) }
+        }).ok_or_else(|| ActionableError {
                 code: ErrorCode::ParsePackageJson,
-                message: format!("Property \"scripts\" in {} is not an object", package_json_path),
-                suggestion: "Try making sure that the \"scripts\" property in package.json is an object. For example:\n\n{\n    \"start\": \"node app.js\"\n}".to_string(),
+                message: format!("Property \"scripts\" in {} is not an object or is empty", package_json_path),
+                suggestion: "Try making sure that the \"scripts\" property in package.json is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string(),
             })?;
         Ok(scripts
             .iter()
