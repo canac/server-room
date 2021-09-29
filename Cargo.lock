@@ -172,6 +172,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f81c2b19eebbc4249b3ca6aff70ae05bf18d6a99b7cc63cf0248774e640565"
 
 [[package]]
+name = "ngrammatic"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b79e6be1c04bda2ef26e4258fb09ee3675519ba5f60dc9c80bfd559fdaa08188"
+
+[[package]]
 name = "ntapi"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -281,6 +287,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "inquire",
+ "ngrammatic",
  "serde",
  "serde_json",
 ]

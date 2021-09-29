@@ -1,12 +1,15 @@
+mod actionable_error;
 mod config;
 mod script;
 mod server;
 
+use actionable_error::{ActionableError, ErrorCode};
 use config::Config;
+use ngrammatic::CorpusBuilder;
 use script::Script;
 use server::Server;
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 use inquire::Select;
 use std::collections::HashSet;
 use std::fs;
@@ -16,7 +19,7 @@ use std::iter::FromIterator;
 fn get_new_project_name_from_user(
     config: &Config,
     cli_project_name: Option<&str>,
-) -> Result<String, String> {
+) -> Result<String, ActionableError> {
     match cli_project_name {
         Some(project_name) => {
             // If a project name was provided from the command line, validate it
@@ -27,7 +30,11 @@ fn get_new_project_name_from_user(
         None => {
             // If no project name was provided, let the user pick one
             let mut projects = fs::read_dir(&config.servers_dir)
-                .map_err(|_| "Error reading servers directory".to_string())?
+                .map_err(|_| ActionableError {
+                    code: ErrorCode::ReadServersDir,
+                    message: format!("Couldn't read servers directory {}", config.servers_dir),
+                    suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
+                })?
                 .filter_map(|result| {
                     if let Ok(dir_entry) = result {
                         let project_name = dir_entry.file_name().to_str()?.to_string();
@@ -42,7 +49,7 @@ fn get_new_project_name_from_user(
             projects.sort();
             Select::new("Pick a project", projects)
                 .prompt()
-                .map_err(|err| err.to_string())
+                .map_err(ActionableError::from)
         }
     }
 }
@@ -52,23 +59,41 @@ fn get_existing_server_from_user<'a>(
     config: &'a Config,
     cli_project_name: Option<&str>,
     prompt: &str,
-) -> Result<&'a Server, String> {
+) -> Result<&'a Server, ActionableError> {
     match cli_project_name {
         Some(project_name) => {
             // If a server was provided from the command line, validate it
             config
                 .servers
                 .get(&project_name.to_string())
-                .ok_or(format!("Server \"{}\" does not exist", project_name))
+                .ok_or_else(|| {
+                    let suggestion = match config.get_closest_server_name(project_name) {
+                        Some(suggested_server_name) => {
+                            format!("Did you mean --server {}?", suggested_server_name)
+                        }
+                        None => "Try a different server name.".to_string(),
+                    };
+                    ActionableError {
+                        code: ErrorCode::NonExistentServer,
+                        message: format!("Server \"{}\" does not exist", project_name),
+                        suggestion,
+                    }
+                })
         }
         None => {
             // If no server was provided, let the user pick one
             let mut servers = config.servers.values().collect::<Vec<_>>();
             // Put the servers with the highest weight first
-            servers.sort_by(|server1, server2| server1.get_weight().partial_cmp(&server2.get_weight()).unwrap().reverse());
+            servers.sort_by(|server1, server2| {
+                server1
+                    .get_weight()
+                    .partial_cmp(&server2.get_weight())
+                    .unwrap()
+                    .reverse()
+            });
             Select::new(prompt, servers)
                 .prompt()
-                .map_err(|err| err.to_string())
+                .map_err(ActionableError::from)
         }
     }
 }
@@ -79,7 +104,7 @@ fn get_start_command_from_user(
     project_name: &str,
     cli_start_script: Option<&str>,
     prompt: &str,
-) -> Result<String, String> {
+) -> Result<String, ActionableError> {
     let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
@@ -99,19 +124,20 @@ fn get_start_command_from_user(
                     .reverse()
                     .then_with(|| script1.name.cmp(&script2.name))
             });
-            let start_script = Select::new(prompt, scripts)
-                .prompt()
-                .map_err(|err| err.to_string())?;
+            let start_script = Select::new(prompt, scripts).prompt()?;
             start_script.name
         }
     };
     Ok(format!("npm run {}", start_script))
 }
 
-fn main() -> Result<(), String> {
+fn run() -> Result<(), ActionableError> {
     let config = Config::load_config();
 
-    let matches = App::new("server-room")
+    let app = App::new("server-room")
+        // Allow invalid subcommands because we suggest the correct one
+        .setting(AppSettings::AllowExternalSubcommands)
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .version("0.1.0")
         .author("Caleb Cox")
         .about("Runs dev servers")
@@ -172,8 +198,8 @@ fn main() -> Result<(), String> {
                         .short("s")
                         .long("server"),
                 ),
-        )
-        .get_matches();
+        );
+    let matches = app.get_matches();
 
     match matches.subcommand_name() {
         Some("add") => {
@@ -221,11 +247,38 @@ fn main() -> Result<(), String> {
             )?;
             config.remove_server(server);
         }
-        None => {
-            return Err("No command was provided".to_string());
+        Some(command) => {
+            let mut corpus = CorpusBuilder::new().finish();
+            corpus.add_text("add");
+            corpus.add_text("edit");
+            corpus.add_text("run");
+            corpus.add_text("remove");
+            let results = corpus.search(command, 0.5f32);
+            let suggestion = match results.first() {
+                Some(result) => format!("Did you mean `server-room {}`?", result.text),
+                None => "Try `server-room --help` to see available subcommands.".to_string(),
+            };
+
+            return Err(ActionableError {
+                code: ErrorCode::InvalidCommand,
+                message: format!("Invalid command {}", command),
+                suggestion,
+            });
         }
-        _ => return Err("Some other subcommand was used".to_string()),
+        None => panic!("No command specified"),
     }
 
     Ok(())
+}
+
+fn main() {
+    let exit_code = match run() {
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("{}", err);
+            1
+        }
+    };
+
+    std::process::exit(exit_code);
 }

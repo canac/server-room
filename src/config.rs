@@ -1,4 +1,6 @@
+use super::actionable_error::{ActionableError, ErrorCode};
 use super::{Script, Server};
+use ngrammatic::CorpusBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::f64::consts::LN_2;
@@ -134,47 +136,72 @@ impl Config {
     }
 
     // Determine whether the project name refers to a valid new project
-    pub fn validate_new_project_name(&self, project_name: &str) -> Result<(), String> {
-        match fs::metadata(format!(
+    pub fn validate_new_project_name(&self, project_name: &str) -> Result<(), ActionableError> {
+        let package_json_path = format!("{}/{}/package.json", self.servers_dir, project_name);
+        let metadata = fs::metadata(format!(
             "{}/{}/package.json",
             self.servers_dir, project_name
-        )) {
-            Ok(metadata) => {
-                if !metadata.is_file() {
-                    return Err("Project package.json is not a file".to_string());
-                }
-
-                if self.servers.contains_key(project_name) {
-                    return Err("Project already exists".to_string());
-                }
+        )).map_err(|_| {
+            ActionableError {
+                code: ErrorCode::ReadPackageJson,
+                message: format!("Could not read {}", package_json_path),
+                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}/{}\n    npm init", self.servers_dir, project_name),
             }
-            Err(_) => return Err("Project doesn't have a valid package.json".to_string()),
+        })?;
+
+        if !metadata.is_file() {
+            return Err(ActionableError {
+                code: ErrorCode::ReadPackageJson,
+                message: format!("Could not read {}", package_json_path),
+                suggestion: format!("Try making sure that {} is a file.", package_json_path),
+            });
+        }
+
+        if self.servers.contains_key(project_name) {
+            return Err(ActionableError {
+                code: ErrorCode::DuplicateProject,
+                message: format!("Project {} already exists", project_name),
+                suggestion: format!(
+                    "Try editing the existing project instead.\n\n    server-room edit --server {}",
+                    project_name
+                ),
+            });
         }
 
         Ok(())
     }
 
     // Return a vector of the project's start scripts
-    pub fn load_project_start_scripts(&self, project_name: &str) -> Result<Vec<Script>, String> {
+    pub fn load_project_start_scripts(
+        &self,
+        project_name: &str,
+    ) -> Result<Vec<Script>, ActionableError> {
         let package_json_path = format!("{}/{}/package.json", self.servers_dir, project_name);
-        let package_json_content = match fs::read_to_string(package_json_path) {
-            Ok(content) => content,
-            Err(_) => return Err("Error reading package.json".to_string()),
-        };
-        let package_json: Value = match serde_json::from_str(&package_json_content) {
-            Ok(json) => json,
-            Err(_) => return Err("Error parsing package.json".to_string()),
-        };
-        match &package_json["scripts"] {
-            Value::Object(scripts) => Ok(scripts
-                .iter()
-                .map(|(name, command)| Script {
-                    name: name.to_string(),
-                    command: command.to_string(),
-                })
-                .collect::<Vec<_>>()),
-            _ => Err("scripts property is not an object".to_string()),
-        }
+        let package_json_content = fs::read_to_string(&package_json_path).map_err(|_| {
+            ActionableError {
+                code: ErrorCode::ReadPackageJson,
+                message: format!("Could not read {}", package_json_path),
+                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}/{}\n    npm init", self.servers_dir, project_name),
+            }
+        })?;
+        let package_json: Value =
+            serde_json::from_str(&package_json_content).map_err(|_| ActionableError {
+                code: ErrorCode::ParsePackageJson,
+                message: format!("Could not parse {}", package_json_path),
+                suggestion: "Try making sure that package.json contains valid JSON.".to_string(),
+            })?;
+        let scripts = package_json["scripts"].as_object().ok_or_else(|| ActionableError {
+                code: ErrorCode::ParsePackageJson,
+                message: format!("Property \"scripts\" in {} is not an object", package_json_path),
+                suggestion: "Try making sure that the \"scripts\" property in package.json is an object. For example:\n\n{\n    \"start\": \"node app.js\"\n}".to_string(),
+            })?;
+        Ok(scripts
+            .iter()
+            .map(|(name, command)| Script {
+                name: name.to_string(),
+                command: command.to_string(),
+            })
+            .collect::<Vec<_>>())
     }
 
     // Determine whether the start script for a project is valid
@@ -182,12 +209,30 @@ impl Config {
         &self,
         project_name: &str,
         start_script: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), ActionableError> {
         let scripts = self.load_project_start_scripts(project_name)?;
         if !scripts.iter().any(|script| script.name == start_script) {
-            return Err("Start script doesn't exist".to_string());
+            let package_json_path = format!("{}/{}/package.json", self.servers_dir, project_name);
+            return Err(ActionableError {
+                code: ErrorCode::MissingStartScript,
+                message: format!("No script {} in {}", start_script, package_json_path),
+                suggestion: format!(
+                    "Try adding the script {} to your package.json.",
+                    start_script
+                ),
+            });
         }
 
         Ok(())
+    }
+
+    // Return the name of the server closest to the provided server name
+    pub fn get_closest_server_name(&self, server_name: &str) -> Option<String> {
+        let mut corpus = CorpusBuilder::new().finish();
+        for server_name in self.servers.keys() {
+            corpus.add_text(server_name);
+        }
+        let results = corpus.search(server_name, 0f32);
+        results.first().map(|result| result.text.clone())
     }
 }
