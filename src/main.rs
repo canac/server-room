@@ -143,7 +143,7 @@ fn run() -> Result<(), ActionableError> {
         .about("Runs dev servers")
         .subcommand(
             SubCommand::with_name("add")
-                .about("add a new server")
+                .about("Adds a new server")
                 .arg(
                     Arg::with_name("project-name")
                         .help("Specifies the project name")
@@ -162,7 +162,7 @@ fn run() -> Result<(), ActionableError> {
         )
         .subcommand(
             SubCommand::with_name("edit")
-                .about("edit a server's start script")
+                .about("Changes a server's start script")
                 .arg(
                     Arg::with_name("server")
                         .help("Specifies the server to edit")
@@ -179,7 +179,7 @@ fn run() -> Result<(), ActionableError> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("run").about("run a server").arg(
+            SubCommand::with_name("run").about("Runs a server").arg(
                 Arg::with_name("server")
                     .help("Specifies the server to run")
                     .takes_value(true)
@@ -189,7 +189,7 @@ fn run() -> Result<(), ActionableError> {
         )
         .subcommand(
             SubCommand::with_name("remove")
-                .about("remove a server")
+                .about("Removes a server")
                 .alias("rm")
                 .arg(
                     Arg::with_name("server")
