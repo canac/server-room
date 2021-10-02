@@ -22,10 +22,7 @@ impl Project {
     pub fn from_name(config: &Config, project_name: String) -> Result<Self, ActionableError> {
         let servers_dir = config.get_servers_dir();
         let package_json_path = format!("{}/{}/package.json", &servers_dir, project_name);
-        let metadata = fs::metadata(format!(
-            "{}/{}/package.json",
-            servers_dir, project_name
-        )).map_err(|_| {
+        let metadata = fs::metadata(&package_json_path).map_err(|_| {
             ActionableError {
                 code: ErrorCode::ReadPackageJson,
                 message: format!("Could not read {}", package_json_path),
