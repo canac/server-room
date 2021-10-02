@@ -166,8 +166,8 @@ impl ServerStore {
         results.first().map(|result| result.text.clone())
     }
 
-    pub fn get_one(&self, server_name: String) -> Option<&Server> {
-        self.servers.get(&server_name)
+    pub fn get_one(&self, server_name: &str) -> Option<&Server> {
+        self.servers.get(server_name)
     }
 
     pub fn get_all(&self) -> Vec<&Server> {

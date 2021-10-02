@@ -33,13 +33,14 @@ fn choose_new_project(
         })?
         .filter_map(|result| {
             if let Ok(dir_entry) = result {
-                let project_name = dir_entry.file_name().to_str()?.to_string();
-                if server_store.get_one(project_name.clone()).is_some() {
+                let file_name = dir_entry.file_name();
+                let project_name = file_name.to_str()?;
+                if server_store.get_one(project_name).is_some() {
                     // Ignore this project because it is already a server
                     return None;
                 }
 
-                return Project::from_name(&*config, project_name).ok();
+                return Project::from_name(&*config, project_name.to_string()).ok();
             }
 
             None
@@ -72,21 +73,19 @@ fn get_existing_server_from_user<'s>(
     match cli_project_name {
         Some(project_name) => {
             // If a server was provided from the command line, validate it
-            server_store
-                .get_one(project_name.to_string())
-                .ok_or_else(|| {
-                    let suggestion = match server_store.get_closest_server_name(project_name) {
-                        Some(suggested_server_name) => {
-                            format!("Did you mean --server {}?", suggested_server_name)
-                        }
-                        None => "Try a different server name.".to_string(),
-                    };
-                    ActionableError {
-                        code: ErrorCode::NonExistentServer,
-                        message: format!("Server \"{}\" does not exist", project_name),
-                        suggestion,
+            server_store.get_one(project_name).ok_or_else(|| {
+                let suggestion = match server_store.get_closest_server_name(project_name) {
+                    Some(suggested_server_name) => {
+                        format!("Did you mean --server {}?", suggested_server_name)
                     }
-                })
+                    None => "Try a different server name.".to_string(),
+                };
+                ActionableError {
+                    code: ErrorCode::NonExistentServer,
+                    message: format!("Server \"{}\" does not exist", project_name),
+                    suggestion,
+                }
+            })
         }
         None => {
             // If no server was provided, let the user pick one
