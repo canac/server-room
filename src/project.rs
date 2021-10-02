@@ -20,13 +20,16 @@ impl fmt::Display for Project {
 impl Project {
     // Try to create a project based on a name
     pub fn from_name(config: &Config, project_name: String) -> Result<Self, ActionableError> {
-        let servers_dir = config.get_servers_dir();
-        let package_json_path = format!("{}/{}/package.json", &servers_dir, project_name);
+        let project = Project {
+            name: project_name.clone(),
+            dir: format!("{}/{}", config.get_servers_dir(), project_name),
+        };
+        let package_json_path = project.get_package_json();
         let metadata = fs::metadata(&package_json_path).map_err(|_| {
             ActionableError {
                 code: ErrorCode::ReadPackageJson,
                 message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}/{}\n    npm init", servers_dir, project_name),
+                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}\n    npm init", project.dir),
             }
         })?;
 
@@ -38,15 +41,12 @@ impl Project {
             });
         }
 
-        Ok(Project {
-            name: project_name.clone(),
-            dir: format!("{}/{}", servers_dir, project_name),
-        })
+        Ok(project)
     }
 
     // Return a vector of the project's start scripts
     pub fn get_start_scripts(&self) -> Result<Vec<Script>, ActionableError> {
-        let package_json_path = format!("{}/package.json", self.dir);
+        let package_json_path = self.get_package_json();
         let package_json_content = fs::read_to_string(&package_json_path).map_err(|_| {
             ActionableError {
                 code: ErrorCode::ReadPackageJson,
@@ -80,10 +80,9 @@ impl Project {
     pub fn validate_start_script(&self, start_script: &str) -> Result<(), ActionableError> {
         let scripts = self.get_start_scripts()?;
         if !scripts.iter().any(|script| script.name == start_script) {
-            let package_json_path = format!("{}/package.json", self.dir);
             return Err(ActionableError {
                 code: ErrorCode::MissingStartScript,
-                message: format!("No script {} in {}", start_script, package_json_path),
+                message: format!("No script {} in {}", start_script, self.get_package_json()),
                 suggestion: format!(
                     "Try adding the script {} to your package.json.",
                     start_script
@@ -92,5 +91,10 @@ impl Project {
         }
 
         Ok(())
+    }
+
+    // Return the path to the project's package.json file
+    fn get_package_json(&self) -> String {
+        format!("{}/package.json", self.dir)
     }
 }
