@@ -2,12 +2,19 @@ use super::actionable_error::{ActionableError, ErrorCode};
 use super::config::Config;
 use super::script::Script;
 use serde_json::Value;
+use std::fmt;
 use std::fs;
 
 // This struct represents a project on the filesystem
 pub struct Project {
     pub name: String,
     pub dir: String,
+}
+
+impl fmt::Display for Project {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> fmt::Result {
+        write!(formatter, "{}", self.name)
+    }
 }
 
 impl Project {

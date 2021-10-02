@@ -19,11 +19,11 @@ use std::fs;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
-// Let the user interactively choose the name of a new project
-fn choose_new_project_name(
+// Let the user interactively choose a new project
+fn choose_new_project(
     config: Rc<Config>,
     server_store: &ServerStore,
-) -> Result<String, ActionableError> {
+) -> Result<Project, ActionableError> {
     // If no project name was provided, let the user pick one
     let mut projects = fs::read_dir(&config.get_servers_dir())
         .map_err(|_| ActionableError {
@@ -34,17 +34,18 @@ fn choose_new_project_name(
         .filter_map(|result| {
             if let Ok(dir_entry) = result {
                 let project_name = dir_entry.file_name().to_str()?.to_string();
-                let valid_project = Project::from_name(&*config, project_name.clone()).is_ok();
-                let existing_project = server_store.get_one(project_name.clone()).is_some();
-                if valid_project && !existing_project {
-                    return Some(project_name);
+                if server_store.get_one(project_name.clone()).is_some() {
+                    // Ignore this project because it is already a server
+                    return None;
                 }
+
+                return Project::from_name(&*config, project_name).ok();
             }
 
             None
         })
         .collect::<Vec<_>>();
-    projects.sort();
+    projects.sort_by(|project1, project2| project1.name.cmp(&project2.name));
 
     if projects.is_empty() {
         return Err(ActionableError {
@@ -219,13 +220,10 @@ fn run() -> Result<(), ActionableError> {
     match matches.subcommand_name() {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
-            let project = Project::from_name(
-                &*config,
-                match options.value_of("project-name") {
-                    Some(project_name) => project_name.to_string(),
-                    None => choose_new_project_name(config.clone(), &server_store)?,
-                },
-            )?;
+            let project = match options.value_of("project-name") {
+                Some(project_name) => Project::from_name(&*config, project_name.to_string()),
+                None => choose_new_project(config, &server_store),
+            }?;
             let start_command = get_start_command_from_user(
                 &project,
                 options.value_of("start-script"),
