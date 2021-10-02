@@ -2,43 +2,47 @@ mod actionable_error;
 mod config;
 mod script;
 mod server;
+mod server_store;
 
 use actionable_error::{ActionableError, ErrorCode};
 use config::Config;
-use ngrammatic::CorpusBuilder;
 use script::Script;
 use server::Server;
+use server_store::ServerStore;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use inquire::Select;
+use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
 use std::iter::FromIterator;
+use std::rc::Rc;
 
 // Get the name of a new project from the command line argument, falling back to letting the user interactively pick one
 fn get_new_project_name_from_user(
-    config: &Config,
+    config: Rc<Config>,
+    server_store: &ServerStore,
     cli_project_name: Option<&str>,
 ) -> Result<String, ActionableError> {
     match cli_project_name {
         Some(project_name) => {
             // If a project name was provided from the command line, validate it
             let project_name = project_name.to_string();
-            config.validate_new_project_name(&project_name)?;
+            server_store.validate_new_project_name(&project_name)?;
             Ok(project_name)
         }
         None => {
             // If no project name was provided, let the user pick one
-            let mut projects = fs::read_dir(&config.servers_dir)
+            let mut projects = fs::read_dir(&config.get_servers_dir())
                 .map_err(|_| ActionableError {
                     code: ErrorCode::ReadServersDir,
-                    message: format!("Couldn't read servers directory {}", config.servers_dir),
+                    message: format!("Couldn't read servers directory {}", config.get_servers_dir()),
                     suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
                 })?
                 .filter_map(|result| {
                     if let Ok(dir_entry) = result {
                         let project_name = dir_entry.file_name().to_str()?.to_string();
-                        if config.validate_new_project_name(&project_name).is_ok() {
+                        if server_store.validate_new_project_name(&project_name).is_ok() {
                             return Some(project_name);
                         }
                     }
@@ -53,7 +57,7 @@ fn get_new_project_name_from_user(
                     code: ErrorCode::NoNewServers,
                     message: format!(
                         "Servers directory {} contains only servers that have already been added",
-                        config.servers_dir
+                        config.get_servers_dir()
                     ),
                     suggestion: "Try creating a new server first.".to_string(),
                 });
@@ -67,19 +71,18 @@ fn get_new_project_name_from_user(
 }
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
-fn get_existing_server_from_user<'a>(
-    config: &'a Config,
+fn get_existing_server_from_user<'s>(
+    server_store: &'s ServerStore,
     cli_project_name: Option<&str>,
     prompt: &str,
-) -> Result<&'a Server, ActionableError> {
+) -> Result<&'s Server, ActionableError> {
     match cli_project_name {
         Some(project_name) => {
             // If a server was provided from the command line, validate it
-            config
-                .servers
-                .get(&project_name.to_string())
+            server_store
+                .get_one(project_name.to_string())
                 .ok_or_else(|| {
-                    let suggestion = match config.get_closest_server_name(project_name) {
+                    let suggestion = match server_store.get_closest_server_name(project_name) {
                         Some(suggested_server_name) => {
                             format!("Did you mean --server {}?", suggested_server_name)
                         }
@@ -94,7 +97,7 @@ fn get_existing_server_from_user<'a>(
         }
         None => {
             // If no server was provided, let the user pick one
-            let mut servers = config.servers.values().collect::<Vec<_>>();
+            let mut servers = server_store.get_all();
             // Put the servers with the highest weight first
             servers.sort_by(|server1, server2| {
                 server1
@@ -121,7 +124,7 @@ fn get_existing_server_from_user<'a>(
 
 // Get the start command from the script name command line argument, falling back to letting the user interactively pick one
 fn get_start_command_from_user(
-    config: &Config,
+    server_store: &ServerStore,
     project_name: &str,
     cli_start_script: Option<&str>,
     prompt: &str,
@@ -130,12 +133,12 @@ fn get_start_command_from_user(
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
             let start_script = start_script.to_string();
-            config.validate_start_script(project_name, &start_script)?;
+            server_store.validate_start_script(project_name, &start_script)?;
             start_script
         }
         None => {
             // If no start script was provided, let the user pick one
-            let mut scripts = config.load_project_start_scripts(project_name)?;
+            let mut scripts = server_store.load_project_start_scripts(project_name)?;
             let priority_scripts = HashSet::<&&str>::from_iter(["dev", "run", "start"].iter());
             // Sort the scripts by name, but put priority scripts first
             scripts.sort_by(|script1, script2| {
@@ -153,7 +156,8 @@ fn get_start_command_from_user(
 }
 
 fn run() -> Result<(), ActionableError> {
-    let config = Config::load_config();
+    let config = Rc::new(Config::load());
+    let server_store = ServerStore::load(config.clone());
 
     let app = App::new("server-room")
         // Allow invalid subcommands because we suggest the correct one
@@ -225,48 +229,51 @@ fn run() -> Result<(), ActionableError> {
     match matches.subcommand_name() {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
-            let project_name =
-                get_new_project_name_from_user(&config, options.value_of("project-name"))?;
+            let project_name = get_new_project_name_from_user(
+                config,
+                &server_store,
+                options.value_of("project-name"),
+            )?;
             let start_command = get_start_command_from_user(
-                &config,
+                &server_store,
                 &project_name,
                 options.value_of("start-script"),
                 "Pick a start script",
             )?;
-            config.add_server(project_name, start_command);
+            server_store.add_server(project_name, start_command);
         }
         Some("edit") => {
             let options = matches.subcommand_matches("edit").unwrap();
             let server = get_existing_server_from_user(
-                &config,
+                &server_store,
                 options.value_of("server"),
                 "Pick a server to edit",
             )?;
             let start_command = get_start_command_from_user(
-                &config,
+                &server_store,
                 &server.name,
                 options.value_of("start-script"),
                 "Pick a new start script",
             )?;
-            config.set_server_start_command(&server.name, start_command);
+            server_store.set_server_start_command(&server.name, start_command);
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();
             let server = get_existing_server_from_user(
-                &config,
+                &server_store,
                 options.value_of("server"),
                 "Pick a server to run",
             )?;
-            server.start(&config);
+            server_store.start_server(&server.name);
         }
         Some("remove") => {
             let options = matches.subcommand_matches("remove").unwrap();
             let server = get_existing_server_from_user(
-                &config,
+                &server_store,
                 options.value_of("server"),
                 "Pick a server to remove",
             )?;
-            config.remove_server(server);
+            server_store.remove_server(server);
         }
         Some(command) => {
             let mut corpus = CorpusBuilder::new().finish();
