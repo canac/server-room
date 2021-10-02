@@ -1,12 +1,13 @@
 mod actionable_error;
 mod config;
+mod project;
 mod script;
 mod server;
 mod server_store;
 
 use actionable_error::{ActionableError, ErrorCode};
 use config::Config;
-use script::Script;
+use project::Project;
 use server::Server;
 use server_store::ServerStore;
 
@@ -18,56 +19,47 @@ use std::fs;
 use std::iter::FromIterator;
 use std::rc::Rc;
 
-// Get the name of a new project from the command line argument, falling back to letting the user interactively pick one
-fn get_new_project_name_from_user(
+// Let the user interactively choose the name of a new project
+fn choose_new_project_name(
     config: Rc<Config>,
     server_store: &ServerStore,
-    cli_project_name: Option<&str>,
 ) -> Result<String, ActionableError> {
-    match cli_project_name {
-        Some(project_name) => {
-            // If a project name was provided from the command line, validate it
-            let project_name = project_name.to_string();
-            server_store.validate_new_project_name(&project_name)?;
-            Ok(project_name)
-        }
-        None => {
-            // If no project name was provided, let the user pick one
-            let mut projects = fs::read_dir(&config.get_servers_dir())
-                .map_err(|_| ActionableError {
-                    code: ErrorCode::ReadServersDir,
-                    message: format!("Couldn't read servers directory {}", config.get_servers_dir()),
-                    suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
-                })?
-                .filter_map(|result| {
-                    if let Ok(dir_entry) = result {
-                        let project_name = dir_entry.file_name().to_str()?.to_string();
-                        if server_store.validate_new_project_name(&project_name).is_ok() {
-                            return Some(project_name);
-                        }
-                    }
-
-                    None
-                })
-                .collect::<Vec<_>>();
-            projects.sort();
-
-            if projects.is_empty() {
-                return Err(ActionableError {
-                    code: ErrorCode::NoNewServers,
-                    message: format!(
-                        "Servers directory {} contains only servers that have already been added",
-                        config.get_servers_dir()
-                    ),
-                    suggestion: "Try creating a new server first.".to_string(),
-                });
+    // If no project name was provided, let the user pick one
+    let mut projects = fs::read_dir(&config.get_servers_dir())
+        .map_err(|_| ActionableError {
+            code: ErrorCode::ReadServersDir,
+            message: format!("Couldn't read servers directory {}", config.get_servers_dir()),
+            suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
+        })?
+        .filter_map(|result| {
+            if let Ok(dir_entry) = result {
+                let project_name = dir_entry.file_name().to_str()?.to_string();
+                let valid_project = Project::from_name(&*config, project_name.clone()).is_ok();
+                let existing_project = server_store.get_one(project_name.clone()).is_some();
+                if valid_project && !existing_project {
+                    return Some(project_name);
+                }
             }
 
-            Select::new("Pick a project", projects)
-                .prompt()
-                .map_err(ActionableError::from)
-        }
+            None
+        })
+        .collect::<Vec<_>>();
+    projects.sort();
+
+    if projects.is_empty() {
+        return Err(ActionableError {
+            code: ErrorCode::NoNewServers,
+            message: format!(
+                "Servers directory {} contains only servers that have already been added",
+                config.get_servers_dir()
+            ),
+            suggestion: "Try creating a new server first.".to_string(),
+        });
     }
+
+    Select::new("Pick a project", projects)
+        .prompt()
+        .map_err(ActionableError::from)
 }
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
@@ -124,21 +116,19 @@ fn get_existing_server_from_user<'s>(
 
 // Get the start command from the script name command line argument, falling back to letting the user interactively pick one
 fn get_start_command_from_user(
-    server_store: &ServerStore,
-    project_name: &str,
+    project: &Project,
     cli_start_script: Option<&str>,
     prompt: &str,
 ) -> Result<String, ActionableError> {
     let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
-            let start_script = start_script.to_string();
-            server_store.validate_start_script(project_name, &start_script)?;
-            start_script
+            project.validate_start_script(start_script)?;
+            start_script.to_string()
         }
         None => {
             // If no start script was provided, let the user pick one
-            let mut scripts = server_store.load_project_start_scripts(project_name)?;
+            let mut scripts = project.get_start_scripts()?;
             let priority_scripts = HashSet::<&&str>::from_iter(["dev", "run", "start"].iter());
             // Sort the scripts by name, but put priority scripts first
             scripts.sort_by(|script1, script2| {
@@ -229,18 +219,19 @@ fn run() -> Result<(), ActionableError> {
     match matches.subcommand_name() {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
-            let project_name = get_new_project_name_from_user(
-                config,
-                &server_store,
-                options.value_of("project-name"),
+            let project = Project::from_name(
+                &*config,
+                match options.value_of("project-name") {
+                    Some(project_name) => project_name.to_string(),
+                    None => choose_new_project_name(config.clone(), &server_store)?,
+                },
             )?;
             let start_command = get_start_command_from_user(
-                &server_store,
-                &project_name,
+                &project,
                 options.value_of("start-script"),
                 "Pick a start script",
             )?;
-            server_store.add_server(project_name, start_command);
+            server_store.add_server(&project, start_command)?;
         }
         Some("edit") => {
             let options = matches.subcommand_matches("edit").unwrap();
@@ -249,9 +240,9 @@ fn run() -> Result<(), ActionableError> {
                 options.value_of("server"),
                 "Pick a server to edit",
             )?;
+            let project = Project::from_name(&config, server.name.clone())?;
             let start_command = get_start_command_from_user(
-                &server_store,
-                &server.name,
+                &project,
                 options.value_of("start-script"),
                 "Pick a new start script",
             )?;

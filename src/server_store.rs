@@ -1,10 +1,10 @@
 use super::actionable_error::{ActionableError, ErrorCode};
-use super::{Config, Script, Server};
+use super::project::Project;
+use super::{Config, Server};
 use ngrammatic::CorpusBuilder;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::f64::consts::LN_2;
 use std::fs;
 use std::rc::Rc;
@@ -85,13 +85,31 @@ impl ServerStore {
             .for_each(|server| server.link(config.clone()))
     }
 
-    // Permanently add a new server to the configuration
-    pub fn add_server(&self, project_name: String, start_command: String) {
+    // Permanently add a new server to the server store
+    pub fn add_server(
+        &self,
+        project: &Project,
+        start_command: String,
+    ) -> Result<(), ActionableError> {
+        // Make sure the project doesn't already exist
+        if self.servers.contains_key(&project.name) {
+            return Err(ActionableError {
+                code: ErrorCode::DuplicateProject,
+                message: format!("Project {} already exists", project.name),
+                suggestion: format!(
+                    "Try editing the existing project instead.\n\n    server-room edit --server {}",
+                    project.name
+                ),
+            });
+        }
+
         let mut new_store = self.clone();
-        let mut server = Server::new(project_name.clone(), start_command);
+        let mut server = Server::new(project.name.clone(), start_command);
         server.link(self.config.as_ref().unwrap().clone());
-        new_store.servers.insert(project_name, server);
+        new_store.servers.insert(project.name.clone(), server);
         new_store.flush();
+
+        Ok(())
     }
 
     // Permanently set the start command of the specified server
@@ -136,105 +154,6 @@ impl ServerStore {
         let mut new_store = self.clone();
         new_store.servers.remove(&server.name);
         new_store.flush();
-    }
-
-    // Determine whether the project name refers to a valid new project
-    pub fn validate_new_project_name(&self, project_name: &str) -> Result<(), ActionableError> {
-        let servers_dir = self.config.as_ref().unwrap().get_servers_dir();
-        let package_json_path = format!("{}/{}/package.json", &servers_dir, project_name);
-        let metadata = fs::metadata(format!(
-            "{}/{}/package.json",
-            servers_dir, project_name
-        )).map_err(|_| {
-            ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}/{}\n    npm init", self.config.as_ref().unwrap().get_servers_dir(), project_name),
-            }
-        })?;
-
-        if !metadata.is_file() {
-            return Err(ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try making sure that {} is a file.", package_json_path),
-            });
-        }
-
-        if self.servers.contains_key(project_name) {
-            return Err(ActionableError {
-                code: ErrorCode::DuplicateProject,
-                message: format!("Project {} already exists", project_name),
-                suggestion: format!(
-                    "Try editing the existing project instead.\n\n    server-room edit --server {}",
-                    project_name
-                ),
-            });
-        }
-
-        Ok(())
-    }
-
-    // Return a vector of the project's start scripts
-    pub fn load_project_start_scripts(
-        &self,
-        project_name: &str,
-    ) -> Result<Vec<Script>, ActionableError> {
-        let package_json_path = format!(
-            "{}/{}/package.json",
-            self.config.as_ref().unwrap().get_servers_dir(),
-            project_name
-        );
-        let package_json_content = fs::read_to_string(&package_json_path).map_err(|_| {
-            ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}/{}\n    npm init", self.config.as_ref().unwrap().get_servers_dir(), project_name),
-            }
-        })?;
-        let package_json: Value =
-            serde_json::from_str(&package_json_content).map_err(|_| ActionableError {
-                code: ErrorCode::ParsePackageJson,
-                message: format!("Could not parse {}", package_json_path),
-                suggestion: "Try making sure that package.json contains valid JSON.".to_string(),
-            })?;
-        let scripts = package_json["scripts"].as_object().and_then(|scripts| {
-            if scripts.is_empty() { None } else { Some(scripts) }
-        }).ok_or_else(|| ActionableError {
-                code: ErrorCode::ParsePackageJson,
-                message: format!("Property \"scripts\" in {} is not an object or is empty", package_json_path),
-                suggestion: "Try making sure that the \"scripts\" property in package.json is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string(),
-            })?;
-        Ok(scripts
-            .iter()
-            .map(|(name, command)| Script {
-                name: name.to_string(),
-                command: command.to_string(),
-            })
-            .collect::<Vec<_>>())
-    }
-
-    // Determine whether the start script for a project is valid
-    pub fn validate_start_script(
-        &self,
-        project_name: &str,
-        start_script: &str,
-    ) -> Result<(), ActionableError> {
-        let scripts = self.load_project_start_scripts(project_name)?;
-        let servers_dir = self.config.as_ref().unwrap().get_servers_dir();
-        if !scripts.iter().any(|script| script.name == start_script) {
-            let package_json_path = format!("{}/{}/package.json", servers_dir, project_name);
-            return Err(ActionableError {
-                code: ErrorCode::MissingStartScript,
-                message: format!("No script {} in {}", start_script, package_json_path),
-                suggestion: format!(
-                    "Try adding the script {} to your package.json.",
-                    start_script
-                ),
-            });
-        }
-
-        Ok(())
     }
 
     // Return the name of the server closest to the provided server name

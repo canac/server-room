@@ -15,6 +15,7 @@ impl Config {
         serde_json::from_str(&config_str).expect("Error parsing JSON string")
     }
 
+    // Return the config's servers_dir
     pub fn get_servers_dir(&self) -> &str {
         self.servers_dir.as_str()
     }
