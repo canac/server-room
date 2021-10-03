@@ -4,11 +4,12 @@ use super::script::Script;
 use serde_json::Value;
 use std::fmt;
 use std::fs;
+use std::path::PathBuf;
 
 // This struct represents a project on the filesystem
 pub struct Project {
     pub name: String,
-    pub dir: String,
+    pub dir: PathBuf,
 }
 
 impl fmt::Display for Project {
@@ -22,22 +23,22 @@ impl Project {
     pub fn from_name(config: &Config, project_name: String) -> Result<Self, ActionableError> {
         let project = Project {
             name: project_name.clone(),
-            dir: format!("{}/{}", config.get_servers_dir(), project_name),
+            dir: config.get_servers_dir().join(project_name),
         };
         let package_json_path = project.get_package_json();
         let metadata = fs::metadata(&package_json_path).map_err(|_| {
             ActionableError {
                 code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}\n    npm init", project.dir),
+                message: format!("Could not read {:?}", package_json_path),
+                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", project.dir),
             }
         })?;
 
         if !metadata.is_file() {
             return Err(ActionableError {
                 code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try making sure that {} is a file.", package_json_path),
+                message: format!("Could not read {:?}", package_json_path),
+                suggestion: format!("Try making sure that {:?} is a file.", package_json_path),
             });
         }
 
@@ -50,21 +51,21 @@ impl Project {
         let package_json_content = fs::read_to_string(&package_json_path).map_err(|_| {
             ActionableError {
                 code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {}\n    npm init", self.dir),
+                message: format!("Could not read {:?}", package_json_path),
+                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", self.dir),
             }
         })?;
         let package_json: Value =
             serde_json::from_str(&package_json_content).map_err(|_| ActionableError {
                 code: ErrorCode::ParsePackageJson,
-                message: format!("Could not parse {}", package_json_path),
+                message: format!("Could not parse {:?}", package_json_path),
                 suggestion: "Try making sure that package.json contains valid JSON.".to_string(),
             })?;
         let scripts = package_json["scripts"].as_object().and_then(|scripts| {
             if scripts.is_empty() { None } else { Some(scripts) }
         }).ok_or_else(|| ActionableError {
                 code: ErrorCode::ParsePackageJson,
-                message: format!("Property \"scripts\" in {} is not an object or is empty", package_json_path),
+                message: format!("Property \"scripts\" in {:?} is not an object or is empty", package_json_path),
                 suggestion: "Try making sure that the \"scripts\" property in package.json is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string(),
             })?;
         Ok(scripts
@@ -82,7 +83,11 @@ impl Project {
         if !scripts.iter().any(|script| script.name == start_script) {
             return Err(ActionableError {
                 code: ErrorCode::MissingStartScript,
-                message: format!("No script {} in {}", start_script, self.get_package_json()),
+                message: format!(
+                    "No script {} in {:?}",
+                    start_script,
+                    self.get_package_json()
+                ),
                 suggestion: format!(
                     "Try adding the script {} to your package.json.",
                     start_script
@@ -94,7 +99,7 @@ impl Project {
     }
 
     // Return the path to the project's package.json file
-    fn get_package_json(&self) -> String {
-        format!("{}/package.json", self.dir)
+    fn get_package_json(&self) -> PathBuf {
+        self.dir.join("package.json")
     }
 }

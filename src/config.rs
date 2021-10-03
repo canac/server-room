@@ -1,11 +1,12 @@
 use serde::Deserialize;
 use std::fs;
+use std::path::PathBuf;
 
 // This struct represents the config that is used by the rest of the application
 #[derive(Deserialize)]
 pub struct Config {
     // The directory where all of the servers are located
-    servers_dir: String,
+    servers_dir: PathBuf,
 }
 
 impl Config {
@@ -16,7 +17,7 @@ impl Config {
     }
 
     // Return the config's servers_dir
-    pub fn get_servers_dir(&self) -> &str {
-        self.servers_dir.as_str()
+    pub fn get_servers_dir(&self) -> PathBuf {
+        self.servers_dir.clone()
     }
 }

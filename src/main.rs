@@ -28,7 +28,7 @@ fn choose_new_project(
     let mut projects = fs::read_dir(&config.get_servers_dir())
         .map_err(|_| ActionableError {
             code: ErrorCode::ReadServersDir,
-            message: format!("Couldn't read servers directory {}", config.get_servers_dir()),
+            message: format!("Couldn't read servers directory {:?}", config.get_servers_dir()),
             suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
         })?
         .filter_map(|result| {
@@ -52,7 +52,7 @@ fn choose_new_project(
         return Err(ActionableError {
             code: ErrorCode::NoNewServers,
             message: format!(
-                "Servers directory {} contains only servers that have already been added",
+                "Servers directory {:?} contains only servers that have already been added",
                 config.get_servers_dir()
             ),
             suggestion: "Try creating a new server first.".to_string(),

@@ -1,6 +1,7 @@
 use super::config::Config;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 
@@ -56,11 +57,11 @@ impl Server {
 
     // Calculate the server's project dir
     // Requires the the config be set first
-    pub fn get_project_dir(&self) -> String {
-        format!(
-            "{}/{}",
-            self.config.as_ref().unwrap().get_servers_dir(),
-            self.name
-        )
+    pub fn get_project_dir(&self) -> PathBuf {
+        self.config
+            .as_ref()
+            .unwrap()
+            .get_servers_dir()
+            .join(&self.name)
     }
 }
