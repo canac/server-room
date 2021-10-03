@@ -2,7 +2,6 @@ use super::actionable_error::{ActionableError, ErrorCode};
 use super::project::Project;
 use super::{Config, Server};
 use ngrammatic::CorpusBuilder;
-use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::LN_2;
@@ -16,29 +15,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Clone)]
 pub struct ServerStore {
     servers: std::collections::HashMap<String, Server>,
-    config: Option<Rc<Config>>,
+    config: Rc<Config>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct RawServerStore {
     servers: Vec<Server>,
-}
-
-// Implement a custom deserializer that deserializes the raw servers vector into a hash map
-impl<'de> Deserialize<'de> for ServerStore {
-    fn deserialize<D>(deserializer: D) -> Result<ServerStore, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(ServerStore {
-            servers: RawServerStore::deserialize(deserializer)?
-                .servers
-                .into_iter()
-                .map(|server| (server.name.clone(), server))
-                .collect(),
-            config: None,
-        })
-    }
 }
 
 // Implement a custom serializer that serializes the servers hash map into a vector
@@ -62,10 +44,16 @@ impl ServerStore {
     pub fn load(config: Rc<Config>) -> ServerStore {
         let server_store_str =
             fs::read_to_string("servers.json").expect("Error reading server store");
-        let mut store: ServerStore =
+        let raw_store: RawServerStore =
             serde_json::from_str(&server_store_str).expect("Error parsing JSON string");
-        store.link(config);
-        store
+        ServerStore {
+            servers: raw_store
+                .servers
+                .into_iter()
+                .map(|server| (server.name.clone(), server))
+                .collect(),
+            config,
+        }
     }
 
     // Write the data store to disk
@@ -75,14 +63,6 @@ impl ServerStore {
             serde_json::to_string_pretty(&self).expect("Error stringifying config to JSON"),
         )
         .expect("Error writing server store")
-    }
-
-    // Link the server store to a global config
-    pub fn link(&mut self, config: Rc<Config>) {
-        self.config = Some(config.clone());
-        self.servers
-            .values_mut()
-            .for_each(|server| server.link(config.clone()))
     }
 
     // Permanently add a new server to the server store
@@ -104,8 +84,7 @@ impl ServerStore {
         }
 
         let mut new_store = self.clone();
-        let mut server = Server::new(project.name.clone(), start_command);
-        server.link(self.config.as_ref().unwrap().clone());
+        let server = Server::new(self.config.as_ref(), project.name.clone(), start_command);
         new_store.servers.insert(project.name.clone(), server);
         new_store.flush();
 

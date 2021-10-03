@@ -3,16 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
 use std::process::Command;
-use std::rc::Rc;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Server {
     pub name: String,
+    #[serde(skip)]
+    pub dir: PathBuf,
     pub start_command: String,
     pub frecency: f64,
-
-    #[serde(skip)]
-    config: Option<Rc<Config>>,
 }
 
 impl fmt::Display for Server {
@@ -23,18 +21,13 @@ impl fmt::Display for Server {
 
 impl Server {
     // Create a new server
-    pub fn new(name: String, start_command: String) -> Self {
+    pub fn new(config: &Config, name: String, start_command: String) -> Self {
         Server {
-            name,
+            name: name.clone(),
+            dir: config.get_servers_dir().join(name),
             start_command,
             frecency: 0f64,
-            config: None,
         }
-    }
-
-    // Link the server to a global config
-    pub fn link(&mut self, config: Rc<Config>) {
-        self.config = Some(config);
     }
 
     // Calculate the likelihood that this server will be used again
@@ -56,12 +49,7 @@ impl Server {
     }
 
     // Calculate the server's project dir
-    // Requires the the config be set first
     pub fn get_project_dir(&self) -> PathBuf {
-        self.config
-            .as_ref()
-            .unwrap()
-            .get_servers_dir()
-            .join(&self.name)
+        self.dir.clone()
     }
 }
