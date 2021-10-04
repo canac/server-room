@@ -15,6 +15,9 @@ pub enum ApplicationError {
     #[error("Script \"{script}\" doesn't exist in \"{path}\"")]
     NonExistentScript { path: PathBuf, script: String },
 
+    #[error("Couldn't execute command \"{0}\"")]
+    RunScript(String),
+
     #[error("Server \"{0}\" don't exist")]
     NonExistentServer(String),
 

@@ -31,7 +31,7 @@ fn choose_new_project(
             if let Ok(dir_entry) = result {
                 let file_name = dir_entry.file_name();
                 let project_name = file_name.to_str()?;
-                if server_store.get_one(project_name).is_some() {
+                if server_store.get_one(project_name).is_ok() {
                     // Ignore this project because it is already a server
                     return None;
                 }
@@ -60,12 +60,7 @@ fn get_existing_server_from_user<'s>(
     prompt: &str,
 ) -> Result<&'s Server, ApplicationError> {
     match cli_project_name {
-        Some(project_name) => {
-            // If a server was provided from the command line, validate it
-            server_store
-                .get_one(project_name)
-                .ok_or_else(|| ApplicationError::NonExistentServer(project_name.to_string()))
-        }
+        Some(project_name) => server_store.get_one(project_name),
         None => {
             // If no server was provided, let the user pick one
             let mut servers = server_store.get_all();
@@ -203,7 +198,7 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("start-script"),
                 "Pick a start script",
             )?;
-            server_store.add_server(&project, start_command)?;
+            server_store.add_server(&project, start_command)
         }
         Some("edit") => {
             let options = matches.subcommand_matches("edit").unwrap();
@@ -218,7 +213,7 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("start-script"),
                 "Pick a new start script",
             )?;
-            server_store.set_server_start_command(&server.name, start_command);
+            server_store.set_server_start_command(&server.name, start_command)
         }
         Some("run") => {
             let options = matches.subcommand_matches("run").unwrap();
@@ -227,7 +222,7 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("server"),
                 "Pick a server to run",
             )?;
-            server_store.start_server(&server.name);
+            server_store.start_server(&server.name)
         }
         Some("remove") => {
             let options = matches.subcommand_matches("remove").unwrap();
@@ -237,14 +232,11 @@ fn run() -> Result<(), ApplicationError> {
                 "Pick a server to remove",
             )?;
             server_store.remove_server(server);
+            Ok(())
         }
-        Some(command) => {
-            return Err(ApplicationError::InvalidCommand(command.to_string()));
-        }
+        Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
     }
-
-    Ok(())
 }
 
 fn main() {
@@ -260,6 +252,7 @@ fn main() {
                     path: _,
                     script,
                 } => Some(format!("Try adding the script {} to your package.json.", script)),
+                ApplicationError::RunScript(_) => Some("Make sure that the command is spelled correctly and is in the path.".to_string()),
                 ApplicationError::NonExistentServer(server) => {
                     let config = Rc::new(Config::load());
                     let server_store = ServerStore::load(config);

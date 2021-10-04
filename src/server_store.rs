@@ -85,24 +85,22 @@ impl ServerStore {
     }
 
     // Permanently set the start command of the specified server
-    pub fn set_server_start_command(&self, server_name: &str, start_command: String) {
+    pub fn set_server_start_command(
+        &self,
+        server_name: &str,
+        start_command: String,
+    ) -> Result<(), ApplicationError> {
         let mut new_store = self.clone();
-        new_store
-            .servers
-            .get_mut(server_name)
-            .unwrap_or_else(|| panic!("Invalid server name {}", server_name))
-            .start_command = start_command;
+        let server = new_store.get_one_mut(server_name)?;
+        server.start_command = start_command;
         new_store.flush();
+        Ok(())
     }
 
     // Permanently record a new start time
-    pub fn start_server(&self, server_name: &str) {
+    pub fn start_server(&self, server_name: &str) -> Result<(), ApplicationError> {
         let mut new_store = self.clone();
-
-        let server = new_store
-            .servers
-            .get_mut(server_name)
-            .unwrap_or_else(|| panic!("Invalid server name {}", server_name));
+        let mut server = new_store.get_one_mut(server_name)?;
 
         // Uses the frecency algorithm described here https://wiki.mozilla.org/User:Jesse/NewFrecency
         const FRECENCY_HALF_LIFE_MICROS: f64 = 30f64 * 24f64 * 60f64 * 60f64 * 1_000_000f64; // one month
@@ -118,7 +116,7 @@ impl ServerStore {
         server.frecency = new_score.ln() + now_decay;
         new_store.flush();
 
-        new_store.servers.get(server_name).unwrap().start();
+        new_store.get_one(server_name)?.start()
     }
 
     // Permanently remove the server from the store
@@ -138,8 +136,16 @@ impl ServerStore {
         results.first().map(|result| result.text.clone())
     }
 
-    pub fn get_one(&self, server_name: &str) -> Option<&Server> {
-        self.servers.get(server_name)
+    pub fn get_one(&self, server_name: &str) -> Result<&Server, ApplicationError> {
+        self.servers
+            .get(server_name)
+            .ok_or_else(|| ApplicationError::NonExistentServer(server_name.to_string()))
+    }
+
+    pub fn get_one_mut(&mut self, server_name: &str) -> Result<&mut Server, ApplicationError> {
+        self.servers
+            .get_mut(server_name)
+            .ok_or_else(|| ApplicationError::NonExistentServer(server_name.to_string()))
     }
 
     pub fn get_all(&self) -> Vec<&Server> {

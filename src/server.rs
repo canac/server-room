@@ -1,4 +1,5 @@
 use super::config::Config;
+use super::error::ApplicationError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -37,15 +38,16 @@ impl Server {
     }
 
     // Start up the server
-    pub fn start(&self) {
+    pub fn start(&self) -> Result<(), ApplicationError> {
         // Execute the server's start command, sending input and output to stdin and stdout
-        Command::new("sh")
+        let status = Command::new("sh")
             .args(["-c", self.start_command.as_str()])
             .current_dir(self.get_project_dir())
-            .status()
-            .unwrap_or_else(|_| {
-                panic!("Failed to execute \"{}\" start command", self.start_command)
-            });
+            .status();
+        match status {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ApplicationError::RunScript(self.start_command.clone())),
+        }
     }
 
     // Calculate the server's project dir
