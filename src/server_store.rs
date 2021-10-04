@@ -1,4 +1,4 @@
-use super::actionable_error::{ActionableError, ErrorCode};
+use super::error::ApplicationError;
 use super::project::Project;
 use super::{Config, Server};
 use ngrammatic::CorpusBuilder;
@@ -70,17 +70,10 @@ impl ServerStore {
         &self,
         project: &Project,
         start_command: String,
-    ) -> Result<(), ActionableError> {
+    ) -> Result<(), ApplicationError> {
         // Make sure the project doesn't already exist
         if self.servers.contains_key(&project.name) {
-            return Err(ActionableError {
-                code: ErrorCode::DuplicateProject,
-                message: format!("Project {} already exists", project.name),
-                suggestion: format!(
-                    "Try editing the existing project instead.\n\n    server-room edit --server {}",
-                    project.name
-                ),
-            });
+            return Err(ApplicationError::DuplicateServer(project.name.clone()));
         }
 
         let mut new_store = self.clone();

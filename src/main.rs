@@ -1,12 +1,12 @@
-mod actionable_error;
 mod config;
+mod error;
 mod project;
 mod script;
 mod server;
 mod server_store;
 
-use actionable_error::{ActionableError, ErrorCode};
 use config::Config;
+use error::ApplicationError;
 use project::Project;
 use server::Server;
 use server_store::ServerStore;
@@ -23,14 +23,10 @@ use std::rc::Rc;
 fn choose_new_project(
     config: Rc<Config>,
     server_store: &ServerStore,
-) -> Result<Project, ActionableError> {
+) -> Result<Project, ApplicationError> {
     // If no project name was provided, let the user pick one
     let mut projects = fs::read_dir(&config.get_servers_dir())
-        .map_err(|_| ActionableError {
-            code: ErrorCode::ReadServersDir,
-            message: format!("Couldn't read servers directory {:?}", config.get_servers_dir()),
-            suggestion: "Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string(),
-        })?
+        .map_err(|_| ApplicationError::ReadServersDir(config.get_servers_dir()))?
         .filter_map(|result| {
             if let Ok(dir_entry) = result {
                 let file_name = dir_entry.file_name();
@@ -49,19 +45,12 @@ fn choose_new_project(
     projects.sort_by(|project1, project2| project1.name.cmp(&project2.name));
 
     if projects.is_empty() {
-        return Err(ActionableError {
-            code: ErrorCode::NoNewServers,
-            message: format!(
-                "Servers directory {:?} contains only servers that have already been added",
-                config.get_servers_dir()
-            ),
-            suggestion: "Try creating a new server first.".to_string(),
-        });
+        return Err(ApplicationError::NoNewProjects(config.get_servers_dir()));
     }
 
     Select::new("Pick a project", projects)
         .prompt()
-        .map_err(ActionableError::from)
+        .map_err(ApplicationError::from)
 }
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
@@ -69,23 +58,13 @@ fn get_existing_server_from_user<'s>(
     server_store: &'s ServerStore,
     cli_project_name: Option<&str>,
     prompt: &str,
-) -> Result<&'s Server, ActionableError> {
+) -> Result<&'s Server, ApplicationError> {
     match cli_project_name {
         Some(project_name) => {
             // If a server was provided from the command line, validate it
-            server_store.get_one(project_name).ok_or_else(|| {
-                let suggestion = match server_store.get_closest_server_name(project_name) {
-                    Some(suggested_server_name) => {
-                        format!("Did you mean --server {}?", suggested_server_name)
-                    }
-                    None => "Try a different server name.".to_string(),
-                };
-                ActionableError {
-                    code: ErrorCode::NonExistentServer,
-                    message: format!("Server \"{}\" does not exist", project_name),
-                    suggestion,
-                }
-            })
+            server_store
+                .get_one(project_name)
+                .ok_or_else(|| ApplicationError::NonExistentServer(project_name.to_string()))
         }
         None => {
             // If no server was provided, let the user pick one
@@ -100,16 +79,12 @@ fn get_existing_server_from_user<'s>(
             });
 
             if servers.is_empty() {
-                return Err(ActionableError {
-                    code: ErrorCode::NoServers,
-                    message: "No servers have been added yet".to_string(),
-                    suggestion: "Try adding a new server first.\n\n    server-room add".to_string(),
-                });
+                return Err(ApplicationError::NoServers);
             }
 
             Select::new(prompt, servers)
                 .prompt()
-                .map_err(ActionableError::from)
+                .map_err(ApplicationError::from)
         }
     }
 }
@@ -119,7 +94,7 @@ fn get_start_command_from_user(
     project: &Project,
     cli_start_script: Option<&str>,
     prompt: &str,
-) -> Result<String, ActionableError> {
+) -> Result<String, ApplicationError> {
     let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
@@ -145,7 +120,7 @@ fn get_start_command_from_user(
     Ok(format!("npm run {}", start_script))
 }
 
-fn run() -> Result<(), ActionableError> {
+fn run() -> Result<(), ApplicationError> {
     let config = Rc::new(Config::load());
     let server_store = ServerStore::load(config.clone());
 
@@ -264,22 +239,7 @@ fn run() -> Result<(), ActionableError> {
             server_store.remove_server(server);
         }
         Some(command) => {
-            let mut corpus = CorpusBuilder::new().finish();
-            corpus.add_text("add");
-            corpus.add_text("edit");
-            corpus.add_text("run");
-            corpus.add_text("remove");
-            let results = corpus.search(command, 0.5f32);
-            let suggestion = match results.first() {
-                Some(result) => format!("Did you mean `server-room {}`?", result.text),
-                None => "Try `server-room --help` to see available subcommands.".to_string(),
-            };
-
-            return Err(ActionableError {
-                code: ErrorCode::InvalidCommand,
-                message: format!("Invalid command {}", command),
-                suggestion,
-            });
+            return Err(ApplicationError::InvalidCommand(command.to_string()));
         }
         None => panic!("No command specified"),
     }
@@ -291,7 +251,50 @@ fn main() {
     let exit_code = match run() {
         Ok(_) => 0,
         Err(err) => {
+            // Generate user-facing suggestions based on the error
+            let suggestion: Option<String> = match &err {
+                ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
+                ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
+                ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
+                ApplicationError::NonExistentScript {
+                    path: _,
+                    script,
+                } => Some(format!("Try adding the script {} to your package.json.", script)),
+                ApplicationError::NonExistentServer(server) => {
+                    let config = Rc::new(Config::load());
+                    let server_store = ServerStore::load(config);
+                    Some(match server_store.get_closest_server_name(server.as_str()) {
+                        Some(suggested_server_name) => {
+                            format!("Did you mean --server {}?", suggested_server_name)
+                        }
+                        None => "Try a different server name.".to_string(),
+                    })
+                },
+                ApplicationError::DuplicateServer(server) => Some(format!(
+                    "Try editing the existing server instead.\n\n    server-room edit --server {}",
+                    server
+                )),
+                ApplicationError::NoNewProjects(servers_dir) => Some(format!("Try creating a new project in \"{:?}\" first.", servers_dir)),
+                ApplicationError::NoServers => Some("Try adding a new server first.\n\n    server-room add".to_string()),
+                ApplicationError::InquireError(_) => None,
+                ApplicationError::InvalidCommand(command) => {
+                    let mut corpus = CorpusBuilder::new().finish();
+                    corpus.add_text("add");
+                    corpus.add_text("edit");
+                    corpus.add_text("run");
+                    corpus.add_text("remove");
+                    let results = corpus.search(command.as_str(), 0.5f32);
+                    Some(match results.first() {
+                        Some(result) => format!("Did you mean `server-room {}`?", result.text),
+                        None => "Try `server-room --help` to see available subcommands.".to_string(),
+                    })
+                }
+            };
+
             eprintln!("{}", err);
+            if let Some(suggestion) = suggestion {
+                eprintln!("{}", suggestion);
+            }
             1
         }
     };

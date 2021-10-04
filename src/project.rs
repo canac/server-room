@@ -1,5 +1,5 @@
-use super::actionable_error::{ActionableError, ErrorCode};
 use super::config::Config;
+use super::error::ApplicationError;
 use super::script::Script;
 use serde_json::Value;
 use std::fmt;
@@ -20,54 +20,45 @@ impl fmt::Display for Project {
 
 impl Project {
     // Try to create a project based on a name
-    pub fn from_name(config: &Config, project_name: String) -> Result<Self, ActionableError> {
+    pub fn from_name(config: &Config, project_name: String) -> Result<Self, ApplicationError> {
         let project = Project {
             name: project_name.clone(),
             dir: config.get_servers_dir().join(project_name),
         };
         let package_json_path = project.get_package_json();
-        let metadata = fs::metadata(&package_json_path).map_err(|_| {
-            ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {:?}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", project.dir),
-            }
-        })?;
+        let metadata = fs::metadata(&package_json_path)
+            .map_err(|_| ApplicationError::ReadPackageJson(package_json_path.clone()))?;
 
         if !metadata.is_file() {
-            return Err(ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {:?}", package_json_path),
-                suggestion: format!("Try making sure that {:?} is a file.", package_json_path),
-            });
+            return Err(ApplicationError::ReadPackageJson(package_json_path));
         }
 
         Ok(project)
     }
 
     // Return a vector of the project's start scripts
-    pub fn get_start_scripts(&self) -> Result<Vec<Script>, ActionableError> {
+    pub fn get_start_scripts(&self) -> Result<Vec<Script>, ApplicationError> {
         let package_json_path = self.get_package_json();
-        let package_json_content = fs::read_to_string(&package_json_path).map_err(|_| {
-            ActionableError {
-                code: ErrorCode::ReadPackageJson,
-                message: format!("Could not read {:?}", package_json_path),
-                suggestion: format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", self.dir),
+        let package_json_content = fs::read_to_string(&package_json_path)
+            .map_err(|_| ApplicationError::ReadPackageJson(package_json_path.clone()))?;
+        let package_json: Value = serde_json::from_str(&package_json_content).map_err(|_| {
+            ApplicationError::MalformedPackageJson {
+                path: package_json_path.clone(),
+                cause: "contains invalid JSON".to_string(),
             }
         })?;
-        let package_json: Value =
-            serde_json::from_str(&package_json_content).map_err(|_| ActionableError {
-                code: ErrorCode::ParsePackageJson,
-                message: format!("Could not parse {:?}", package_json_path),
-                suggestion: "Try making sure that package.json contains valid JSON.".to_string(),
-            })?;
-        let scripts = package_json["scripts"].as_object().and_then(|scripts| {
-            if scripts.is_empty() { None } else { Some(scripts) }
-        }).ok_or_else(|| ActionableError {
-                code: ErrorCode::ParsePackageJson,
-                message: format!("Property \"scripts\" in {:?} is not an object or is empty", package_json_path),
-                suggestion: "Try making sure that the \"scripts\" property in package.json is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string(),
-            })?;
+        let scripts = package_json["scripts"].as_object().ok_or_else(|| {
+            ApplicationError::MalformedPackageJson {
+                path: package_json_path.clone(),
+                cause: "\"scripts\" property is not an object".to_string(),
+            }
+        })?;
+        if scripts.is_empty() {
+            return Err(ApplicationError::MalformedPackageJson {
+                path: package_json_path,
+                cause: "\"scripts\" is an empty object".to_string(),
+            });
+        }
         Ok(scripts
             .iter()
             .map(|(name, command)| Script {
@@ -78,20 +69,12 @@ impl Project {
     }
 
     // Determine whether the start script for a project is valid
-    pub fn validate_start_script(&self, start_script: &str) -> Result<(), ActionableError> {
+    pub fn validate_start_script(&self, start_script: &str) -> Result<(), ApplicationError> {
         let scripts = self.get_start_scripts()?;
         if !scripts.iter().any(|script| script.name == start_script) {
-            return Err(ActionableError {
-                code: ErrorCode::MissingStartScript,
-                message: format!(
-                    "No script {} in {:?}",
-                    start_script,
-                    self.get_package_json()
-                ),
-                suggestion: format!(
-                    "Try adding the script {} to your package.json.",
-                    start_script
-                ),
+            return Err(ApplicationError::NonExistentScript {
+                path: self.get_package_json(),
+                script: start_script.to_string(),
             });
         }
 

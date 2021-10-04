@@ -290,6 +290,7 @@ dependencies = [
  "ngrammatic",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
