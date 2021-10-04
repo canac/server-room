@@ -69,7 +69,7 @@ fn get_existing_server_from_user<'s>(
                 server1
                     .get_weight()
                     .partial_cmp(&server2.get_weight())
-                    .unwrap()
+                    .unwrap_or(std::cmp::Ordering::Equal)
                     .reverse()
             });
 
@@ -116,8 +116,8 @@ fn get_start_command_from_user(
 }
 
 fn run() -> Result<(), ApplicationError> {
-    let config = Rc::new(Config::load());
-    let server_store = ServerStore::load(config.clone());
+    let config = Rc::new(Config::load()?);
+    let server_store = ServerStore::load(config.clone())?;
 
     let app = App::new("server-room")
         // Allow invalid subcommands because we suggest the correct one
@@ -231,12 +231,19 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("server"),
                 "Pick a server to remove",
             )?;
-            server_store.remove_server(server);
-            Ok(())
+            server_store.remove_server(server)
         }
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
     }
+}
+
+// Generate a suggestion for the closest server name that matches the provided server name
+// Returns Err if the server store couldn't be loaded. Returns Ok(None) if no suggestions were found.
+fn suggest_server_name(server_name: &str) -> Result<Option<String>, ApplicationError> {
+    let config = Config::load()?;
+    let server_store = ServerStore::load(Rc::new(config))?;
+    Ok(server_store.get_closest_server_name(server_name))
 }
 
 fn main() {
@@ -245,6 +252,12 @@ fn main() {
         Err(err) => {
             // Generate user-facing suggestions based on the error
             let suggestion: Option<String> = match &err {
+                ApplicationError::ReadConfig(_) => Some("Make sure that the configuration file exists.".to_string()),
+                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid JSON.".to_string()),
+                ApplicationError::ReadStore(_) => Some("Make sure that the server store file exists.".to_string()),
+                ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
+                ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid JSON.".to_string()),
+                ApplicationError::StringifyStore(_) => None,
                 ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
@@ -254,13 +267,9 @@ fn main() {
                 } => Some(format!("Try adding the script {} to your package.json.", script)),
                 ApplicationError::RunScript(_) => Some("Make sure that the command is spelled correctly and is in the path.".to_string()),
                 ApplicationError::NonExistentServer(server) => {
-                    let config = Rc::new(Config::load());
-                    let server_store = ServerStore::load(config);
-                    Some(match server_store.get_closest_server_name(server.as_str()) {
-                        Some(suggested_server_name) => {
-                            format!("Did you mean --server {}?", suggested_server_name)
-                        }
-                        None => "Try a different server name.".to_string(),
+                    Some(match suggest_server_name(server) {
+                        Ok(Some(suggestion)) => format!("Did you mean --server {}?", suggestion),
+                        Err(_) | Ok(None) => "Try a different server name.".to_string(),
                     })
                 },
                 ApplicationError::DuplicateServer(server) => Some(format!(

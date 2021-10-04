@@ -3,6 +3,24 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ApplicationError {
+    #[error("Couldn't read config file \"{0}\"")]
+    ReadConfig(PathBuf),
+
+    #[error("Couldn't parse config file \"{0}\"")]
+    ParseConfig(PathBuf),
+
+    #[error("Couldn't read server store file \"{0}\"")]
+    ReadStore(PathBuf),
+
+    #[error("Couldn't write server store file \"{0}\"")]
+    WriteStore(PathBuf),
+
+    #[error("Couldn't parse server store file \"{0}\"")]
+    ParseStore(PathBuf),
+
+    #[error("Couldn't stringify server store file \"{0}\"")]
+    StringifyStore(PathBuf),
+
     #[error("Couldn't read servers directory \"{0}\"")]
     ReadServersDir(PathBuf),
 

@@ -1,3 +1,4 @@
+use super::error::ApplicationError;
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -11,9 +12,11 @@ pub struct Config {
 
 impl Config {
     // Read the configuration from disk
-    pub fn load() -> Config {
-        let config_str = fs::read_to_string("config.json").expect("Error reading configuration");
-        serde_json::from_str(&config_str).expect("Error parsing JSON string")
+    pub fn load() -> Result<Config, ApplicationError> {
+        let config_path = PathBuf::from("config.json");
+        let config_str = fs::read_to_string(&config_path)
+            .map_err(|_| ApplicationError::ReadConfig(config_path.clone()))?;
+        serde_json::from_str(&config_str).map_err(|_| ApplicationError::ParseConfig(config_path))
     }
 
     // Return the config's servers_dir
