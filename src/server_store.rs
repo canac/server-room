@@ -120,9 +120,9 @@ impl ServerStore {
     }
 
     // Permanently remove the server from the store
-    pub fn remove_server(&self, server: &Server) -> Result<(), ApplicationError> {
+    pub fn remove_server(&self, server_name: &str) -> Result<(), ApplicationError> {
         let mut new_store = self.clone();
-        new_store.servers.remove(&server.name);
+        new_store.servers.remove(server_name);
         new_store.flush()
     }
 

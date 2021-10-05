@@ -231,7 +231,7 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("server"),
                 "Pick a server to remove",
             )?;
-            server_store.remove_server(server)
+            server_store.remove_server(&server.name)
         }
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
