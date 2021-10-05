@@ -56,11 +56,11 @@ fn choose_new_project(
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
 fn get_existing_server_from_user<'s>(
     server_store: &'s ServerStore,
-    cli_project_name: Option<&str>,
+    cli_server_name: Option<&str>,
     prompt: &str,
 ) -> Result<&'s Server, ApplicationError> {
-    match cli_project_name {
-        Some(project_name) => server_store.get_one(project_name),
+    match cli_server_name {
+        Some(server_name) => server_store.get_one(server_name),
         None => {
             // If no server was provided, let the user pick one
             let mut servers = server_store.get_all();
