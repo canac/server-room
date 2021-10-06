@@ -38,7 +38,7 @@ fn choose_new_project(
                     return None;
                 }
 
-                return Project::from_name(&*config, project_name.to_string()).ok();
+                return Project::from_name(&config, project_name.to_string()).ok();
             }
 
             None
@@ -210,7 +210,7 @@ fn run() -> Result<(), ApplicationError> {
         Some("add") => {
             let options = matches.subcommand_matches("add").unwrap();
             let project = match options.value_of("project-name") {
-                Some(project_name) => Project::from_name(&*config, project_name.to_string()),
+                Some(project_name) => Project::from_name(&config, project_name.to_string()),
                 None => choose_new_project(config, &server_store),
             }?;
             let start_command = get_start_command_from_user(
