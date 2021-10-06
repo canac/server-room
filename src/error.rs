@@ -18,8 +18,8 @@ pub enum ApplicationError {
     #[error("Couldn't parse server store file \"{0}\"")]
     ParseStore(PathBuf),
 
-    #[error("Couldn't stringify server store file \"{0}\"")]
-    StringifyStore(PathBuf),
+    #[error("Couldn't stringify server store")]
+    StringifyStore,
 
     #[error("Couldn't read servers directory \"{0}\"")]
     ReadServersDir(PathBuf),

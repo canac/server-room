@@ -257,7 +257,7 @@ fn main() {
                 ApplicationError::ReadStore(_) => Some("Make sure that the server store file exists.".to_string()),
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
                 ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
-                ApplicationError::StringifyStore(_) => None,
+                ApplicationError::StringifyStore => None,
                 ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),

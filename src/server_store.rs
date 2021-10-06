@@ -61,8 +61,8 @@ impl ServerStore {
 
         let store_path = PathBuf::from("servers.toml");
         let raw_store = RawServerStore { servers };
-        let stringified = toml::to_string_pretty(&raw_store)
-            .map_err(|_| ApplicationError::StringifyStore(store_path.clone()))?;
+        let stringified =
+            toml::to_string_pretty(&raw_store).map_err(|_| ApplicationError::StringifyStore)?;
         fs::write(&store_path, stringified)
             .map_err(|_| ApplicationError::WriteStore(store_path))?;
         Ok(())
