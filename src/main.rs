@@ -135,10 +135,14 @@ fn get_store_path() -> Result<PathBuf, ApplicationError> {
         .join(PathBuf::from("servers.toml")))
 }
 
-fn run() -> Result<(), ApplicationError> {
+// Load the configuration and server store
+fn load() -> Result<(Rc<Config>, ServerStore), ApplicationError> {
     let config = Rc::new(Config::load(get_config_path()?)?);
     let server_store = ServerStore::load(get_store_path()?, config.clone())?;
+    Ok((config, server_store))
+}
 
+fn run() -> Result<(), ApplicationError> {
     let app = App::new("server-room")
         // Allow invalid subcommands because we suggest the correct one
         .setting(AppSettings::AllowExternalSubcommands)
@@ -146,6 +150,7 @@ fn run() -> Result<(), ApplicationError> {
         .version("0.1.0")
         .author("Caleb Cox")
         .about("Runs dev servers")
+        .subcommand(SubCommand::with_name("cargo").about("Displays configuration"))
         .subcommand(
             SubCommand::with_name("add")
                 .about("Adds a new server")
@@ -207,7 +212,22 @@ fn run() -> Result<(), ApplicationError> {
     let matches = app.get_matches();
 
     match matches.subcommand_name() {
+        Some("config") => {
+            // Display the config and server store paths without actually loading the config because the load might fail
+            // if they don't exist or are malformed
+            let config_path = get_config_path()?;
+            println!(
+                "Configuration file path: {:?}\nServer store path: {:?}",
+                config_path,
+                get_store_path()?
+            );
+            if let Ok(config) = Config::load(config_path) {
+                println!("servers directory: {:?}", config.get_servers_dir())
+            }
+            Ok(())
+        }
         Some("add") => {
+            let (config, server_store) = load()?;
             let options = matches.subcommand_matches("add").unwrap();
             let project = match options.value_of("project-name") {
                 Some(project_name) => Project::from_name(&config, project_name.to_string()),
@@ -221,6 +241,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.add_server(&project, start_command)
         }
         Some("edit") => {
+            let (config, server_store) = load()?;
             let options = matches.subcommand_matches("edit").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -236,6 +257,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.set_server_start_command(&server.name, start_command)
         }
         Some("run") => {
+            let (_, server_store) = load()?;
             let options = matches.subcommand_matches("run").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -245,6 +267,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.start_server(&server.name)
         }
         Some("remove") => {
+            let (_, server_store) = load()?;
             let options = matches.subcommand_matches("remove").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -256,14 +279,6 @@ fn run() -> Result<(), ApplicationError> {
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
     }
-}
-
-// Generate a suggestion for the closest server name that matches the provided server name
-// Returns Err if the server store couldn't be loaded. Returns Ok(None) if no suggestions were found.
-fn suggest_server_name(server_name: &str) -> Result<Option<String>, ApplicationError> {
-    let config = Config::load(get_config_path()?)?;
-    let server_store = ServerStore::load(get_store_path()?, Rc::new(config))?;
-    Ok(server_store.get_closest_server_name(server_name))
 }
 
 fn main() {
@@ -288,9 +303,12 @@ fn main() {
                 } => Some(format!("Try adding the script {} to your package.json.", script)),
                 ApplicationError::RunScript(_) => Some("Make sure that the command is spelled correctly and is in the path.".to_string()),
                 ApplicationError::NonExistentServer(server) => {
-                    Some(match suggest_server_name(server) {
-                        Ok(Some(suggestion)) => format!("Did you mean --server {}?", suggestion),
-                        Err(_) | Ok(None) => "Try a different server name.".to_string(),
+                    let suggested_server = load().ok().and_then(|(_, server_store)| {
+                        server_store.get_closest_server_name(server)
+                    });
+                    Some(match suggested_server {
+                        Some(suggestion) => format!("Did you mean --server {}?", suggestion),
+                        None => "Try a different server name.".to_string(),
                     })
                 },
                 ApplicationError::DuplicateServer(server) => Some(format!(
@@ -302,6 +320,7 @@ fn main() {
                 ApplicationError::InquireError(_) => None,
                 ApplicationError::InvalidCommand(command) => {
                     let mut corpus = CorpusBuilder::new().finish();
+                    corpus.add_text("config");
                     corpus.add_text("add");
                     corpus.add_text("edit");
                     corpus.add_text("run");
