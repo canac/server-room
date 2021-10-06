@@ -43,10 +43,10 @@ impl Serialize for ServerStore {
 impl ServerStore {
     // Load the data store from disk
     pub fn load(config: Rc<Config>) -> Result<ServerStore, ApplicationError> {
-        let store_path = PathBuf::from("servers.json");
+        let store_path = PathBuf::from("servers.toml");
         let server_store_str = fs::read_to_string(&store_path)
             .map_err(|_| ApplicationError::ReadStore(store_path.clone()))?;
-        let raw_store: RawServerStore = serde_json::from_str(&server_store_str)
+        let raw_store: RawServerStore = toml::from_str(&server_store_str)
             .map_err(|_| ApplicationError::ParseStore(store_path))?;
         Ok(ServerStore {
             servers: raw_store
@@ -60,8 +60,8 @@ impl ServerStore {
 
     // Write the data store to disk
     pub fn flush(&self) -> Result<(), ApplicationError> {
-        let store_path = PathBuf::from("servers.json");
-        let stringified = serde_json::to_string_pretty(&self)
+        let store_path = PathBuf::from("servers.toml");
+        let stringified = toml::to_string_pretty(&self)
             .map_err(|_| ApplicationError::StringifyStore(store_path.clone()))?;
         fs::write(&store_path, stringified)
             .map_err(|_| ApplicationError::WriteStore(store_path))?;

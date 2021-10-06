@@ -253,10 +253,10 @@ fn main() {
             // Generate user-facing suggestions based on the error
             let suggestion: Option<String> = match &err {
                 ApplicationError::ReadConfig(_) => Some("Make sure that the configuration file exists.".to_string()),
-                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid JSON.".to_string()),
+                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid TOML.".to_string()),
                 ApplicationError::ReadStore(_) => Some("Make sure that the server store file exists.".to_string()),
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
-                ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid JSON.".to_string()),
+                ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
                 ApplicationError::StringifyStore(_) => None,
                 ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
