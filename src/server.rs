@@ -5,10 +5,17 @@ use std::fmt;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[derive(Clone, Deserialize, Serialize)]
+// This struct represents the server as stored in the server store
+#[derive(Deserialize, Serialize)]
+pub struct RawServer {
+    pub name: String,
+    pub start_command: String,
+    pub frecency: f64,
+}
+// This struct represents the server as used by the rest of the application
+#[derive(Clone)]
 pub struct Server {
     pub name: String,
-    #[serde(skip)]
     pub dir: PathBuf,
     pub start_command: String,
     pub frecency: f64,
@@ -28,6 +35,25 @@ impl Server {
             dir: config.get_servers_dir().join(name),
             start_command,
             frecency: 0f64,
+        }
+    }
+
+    // Create a new server from a raw server
+    pub fn from_raw(config: &Config, raw: RawServer) -> Self {
+        Server {
+            name: raw.name.clone(),
+            dir: config.get_servers_dir().join(raw.name),
+            start_command: raw.start_command,
+            frecency: raw.frecency,
+        }
+    }
+
+    // Create a new server from a raw server
+    pub fn into_raw(self) -> RawServer {
+        RawServer {
+            name: self.name,
+            start_command: self.start_command,
+            frecency: self.frecency,
         }
     }
 

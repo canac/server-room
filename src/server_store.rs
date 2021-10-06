@@ -1,8 +1,8 @@
+use super::config::Config;
 use super::error::ApplicationError;
 use super::project::Project;
-use super::{Config, Server};
+use super::server::{RawServer, Server};
 use ngrammatic::CorpusBuilder;
-use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::LN_2;
 use std::fs;
@@ -21,23 +21,7 @@ pub struct ServerStore {
 
 #[derive(Deserialize, Serialize)]
 pub struct RawServerStore {
-    servers: Vec<Server>,
-}
-
-// Implement a custom serializer that serializes the servers hash map into a vector
-impl Serialize for ServerStore {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut servers = self.servers.clone().into_values().collect::<Vec<_>>();
-
-        // Sort the servers lexicographically by their name
-        servers.sort_by(|server1, server2| server1.name.cmp(&server2.name));
-
-        let raw = RawServerStore { servers };
-        RawServerStore::serialize(&raw, serializer)
-    }
+    servers: Vec<RawServer>,
 }
 
 impl ServerStore {
@@ -52,7 +36,12 @@ impl ServerStore {
             servers: raw_store
                 .servers
                 .into_iter()
-                .map(|server| (server.name.clone(), server))
+                .map(|raw_server| {
+                    (
+                        raw_server.name.clone(),
+                        Server::from_raw(&*config, raw_server),
+                    )
+                })
                 .collect(),
             config,
         })
@@ -60,8 +49,19 @@ impl ServerStore {
 
     // Write the data store to disk
     pub fn flush(&self) -> Result<(), ApplicationError> {
+        let mut servers = self
+            .servers
+            .clone()
+            .into_values()
+            .map(|server| server.into_raw())
+            .collect::<Vec<_>>();
+
+        // Sort the servers lexicographically by their name
+        servers.sort_by(|server1, server2| server1.name.cmp(&server2.name));
+
         let store_path = PathBuf::from("servers.toml");
-        let stringified = toml::to_string_pretty(&self)
+        let raw_store = RawServerStore { servers };
+        let stringified = toml::to_string_pretty(&raw_store)
             .map_err(|_| ApplicationError::StringifyStore(store_path.clone()))?;
         fs::write(&store_path, stringified)
             .map_err(|_| ApplicationError::WriteStore(store_path))?;
