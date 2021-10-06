@@ -12,6 +12,7 @@ use server::Server;
 use server_store::ServerStore;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use colored::*;
 use directories::ProjectDirs;
 use inquire::{Confirm, Select};
 use ngrammatic::CorpusBuilder;
@@ -319,11 +320,14 @@ fn run() -> Result<(), ApplicationError> {
         }
         Some("list") => {
             let (_, server_store) = load()?;
-            println!("Servers:");
-            server_store
-                .get_all()
-                .iter()
-                .for_each(|server| println!("{} ({})", server.name, server.start_command));
+            println!("{}", "Servers:".bold());
+            server_store.get_all().iter().for_each(|server| {
+                println!(
+                    "{} ({})",
+                    server.name.bold().green(),
+                    server.start_command.cyan()
+                )
+            });
             Ok(())
         }
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
@@ -358,7 +362,7 @@ fn main() {
                     let results = corpus.search(script, 0f32);
                     let suggestion = results.first().map(|result| result.text.clone());
                     Some(match suggestion {
-                        Some(suggestion) => format!("Did you mean `--start-script {}`?", suggestion),
+                        Some(suggestion) => format!("Did you mean `{}`?", format!("--start-script {}", suggestion).bold().cyan()),
                         None => format!("Try adding the script {} to your package.json.", script)
                     })
                 },
@@ -368,13 +372,13 @@ fn main() {
                         server_store.get_closest_server_name(server)
                     });
                     Some(match suggested_server {
-                        Some(suggestion) => format!("Did you mean `--server {}`?", suggestion),
+                        Some(suggestion) => format!("Did you mean `{}`?", format!("--server {}", suggestion).bold().cyan()),
                         None => "Try a different server name.".to_string(),
                     })
                 },
                 ApplicationError::DuplicateServer(server) => Some(format!(
-                    "Try editing the existing server instead.\n\n    server-room edit --server {}",
-                    server
+                    "Try editing the existing server instead.\n\n    {}",
+                    format!("server-room edit --server {}", server).bold().cyan()
                 )),
                 ApplicationError::NoNewProjects(servers_dir) => Some(format!("Try creating a new project in \"{:?}\" first.", servers_dir)),
                 ApplicationError::NoServers => Some("Try adding a new server first.\n\n    server-room add".to_string()),
@@ -389,13 +393,13 @@ fn main() {
                     corpus.add_text("list");
                     let results = corpus.search(command.as_str(), 0.5f32);
                     Some(match results.first() {
-                        Some(result) => format!("Did you mean `server-room {}`?", result.text),
+                        Some(result) => format!("Did you mean `{}`?", format!("server-room {}", result.text).bold().cyan()),
                         None => "Try `server-room --help` to see available subcommands.".to_string(),
                     })
                 }
             };
 
-            eprintln!("{}", err);
+            eprintln!("{}: {}", "Error".bold().red(), err);
             if let Some(suggestion) = suggestion {
                 eprintln!("{}", suggestion);
             }
