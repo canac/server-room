@@ -3,6 +3,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ApplicationError {
+    #[error("Couldn't determine application directories")]
+    ProjectDirs,
+
     #[error("Couldn't read config file \"{0}\"")]
     ReadConfig(PathBuf),
 

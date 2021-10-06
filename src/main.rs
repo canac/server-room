@@ -12,11 +12,13 @@ use server::Server;
 use server_store::ServerStore;
 
 use clap::{App, AppSettings, Arg, SubCommand};
+use directories::ProjectDirs;
 use inquire::Select;
 use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
 use std::iter::FromIterator;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 // Let the user interactively choose a new project
@@ -115,9 +117,27 @@ fn get_start_command_from_user(
     Ok(format!("npm run {}", start_script))
 }
 
+fn get_project_dirs() -> Result<ProjectDirs, ApplicationError> {
+    ProjectDirs::from("com", "Canac Apps", "Server Room").ok_or(ApplicationError::ProjectDirs)
+}
+
+// Return the path to the config file
+fn get_config_path() -> Result<PathBuf, ApplicationError> {
+    Ok(get_project_dirs()?
+        .config_dir()
+        .join(PathBuf::from("config.toml")))
+}
+
+// Return the path to the server store file
+fn get_store_path() -> Result<PathBuf, ApplicationError> {
+    Ok(get_project_dirs()?
+        .data_dir()
+        .join(PathBuf::from("servers.toml")))
+}
+
 fn run() -> Result<(), ApplicationError> {
-    let config = Rc::new(Config::load()?);
-    let server_store = ServerStore::load(config.clone())?;
+    let config = Rc::new(Config::load(get_config_path()?)?);
+    let server_store = ServerStore::load(get_store_path()?, config.clone())?;
 
     let app = App::new("server-room")
         // Allow invalid subcommands because we suggest the correct one
@@ -241,8 +261,8 @@ fn run() -> Result<(), ApplicationError> {
 // Generate a suggestion for the closest server name that matches the provided server name
 // Returns Err if the server store couldn't be loaded. Returns Ok(None) if no suggestions were found.
 fn suggest_server_name(server_name: &str) -> Result<Option<String>, ApplicationError> {
-    let config = Config::load()?;
-    let server_store = ServerStore::load(Rc::new(config))?;
+    let config = Config::load(get_config_path()?)?;
+    let server_store = ServerStore::load(get_store_path()?, Rc::new(config))?;
     Ok(server_store.get_closest_server_name(server_name))
 }
 
@@ -252,6 +272,7 @@ fn main() {
         Err(err) => {
             // Generate user-facing suggestions based on the error
             let suggestion: Option<String> = match &err {
+                ApplicationError::ProjectDirs => None,
                 ApplicationError::ReadConfig(_) => Some("Make sure that the configuration file exists.".to_string()),
                 ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid TOML.".to_string()),
                 ApplicationError::ReadStore(_) => Some("Make sure that the server store file exists.".to_string()),

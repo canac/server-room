@@ -17,6 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct ServerStore {
     servers: std::collections::HashMap<String, Server>,
     config: Rc<Config>,
+    store_path: PathBuf,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -26,12 +27,11 @@ pub struct RawServerStore {
 
 impl ServerStore {
     // Load the data store from disk
-    pub fn load(config: Rc<Config>) -> Result<ServerStore, ApplicationError> {
-        let store_path = PathBuf::from("servers.toml");
+    pub fn load(store_path: PathBuf, config: Rc<Config>) -> Result<ServerStore, ApplicationError> {
         let server_store_str = fs::read_to_string(&store_path)
             .map_err(|_| ApplicationError::ReadStore(store_path.clone()))?;
         let raw_store: RawServerStore = toml::from_str(&server_store_str)
-            .map_err(|_| ApplicationError::ParseStore(store_path))?;
+            .map_err(|_| ApplicationError::ParseStore(store_path.clone()))?;
         Ok(ServerStore {
             servers: raw_store
                 .servers
@@ -44,6 +44,7 @@ impl ServerStore {
                 })
                 .collect(),
             config,
+            store_path,
         })
     }
 
@@ -59,12 +60,11 @@ impl ServerStore {
         // Sort the servers lexicographically by their name
         servers.sort_by(|server1, server2| server1.name.cmp(&server2.name));
 
-        let store_path = PathBuf::from("servers.toml");
         let raw_store = RawServerStore { servers };
         let stringified =
             toml::to_string_pretty(&raw_store).map_err(|_| ApplicationError::StringifyStore)?;
-        fs::write(&store_path, stringified)
-            .map_err(|_| ApplicationError::WriteStore(store_path))?;
+        fs::write(&self.store_path, stringified)
+            .map_err(|_| ApplicationError::WriteStore(self.store_path.clone()))?;
         Ok(())
     }
 
