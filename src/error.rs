@@ -1,3 +1,4 @@
+use super::project::Project;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -30,8 +31,12 @@ pub enum ApplicationError {
     #[error("Malformed package.json file \"{path}\": {cause}")]
     MalformedPackageJson { path: PathBuf, cause: String },
 
-    #[error("Script \"{script}\" doesn't exist in \"{path}\"")]
-    NonExistentScript { path: PathBuf, script: String },
+    #[error("Script \"{script}\" doesn't exist in \"{package}\"")]
+    NonExistentScript {
+        project: Project,
+        package: PathBuf,
+        script: String,
+    },
 
     #[error("Couldn't execute command \"{0}\"")]
     RunScript(String),

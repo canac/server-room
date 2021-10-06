@@ -337,9 +337,21 @@ fn main() {
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
                 ApplicationError::NonExistentScript {
-                    path: _,
+                    project,
+                    package: _,
                     script,
-                } => Some(format!("Try adding the script {} to your package.json.", script)),
+                } => {
+                    let mut corpus = CorpusBuilder::new().finish();
+                    project.get_start_scripts().unwrap_or_else(|_| vec![]).iter().for_each(|script| {
+                        corpus.add_text(script.name.as_str())
+                    });
+                    let results = corpus.search(script, 0f32);
+                    let suggestion = results.first().map(|result| result.text.clone());
+                    Some(match suggestion {
+                        Some(suggestion) => format!("Did you mean --start-script {}?", suggestion),
+                        None => format!("Try adding the script {} to your package.json.", script)
+                    })
+                },
                 ApplicationError::RunScript(_) => Some("Make sure that the command is spelled correctly and is in the path.".to_string()),
                 ApplicationError::NonExistentServer(server) => {
                     let suggested_server = load().ok().and_then(|(_, server_store)| {

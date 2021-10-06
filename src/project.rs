@@ -7,6 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 // This struct represents a project on the filesystem
+#[derive(Clone, Debug)]
 pub struct Project {
     pub name: String,
     pub dir: PathBuf,
@@ -73,7 +74,8 @@ impl Project {
         let scripts = self.get_start_scripts()?;
         if !scripts.iter().any(|script| script.name == start_script) {
             return Err(ApplicationError::NonExistentScript {
-                path: self.get_package_json(),
+                project: self.clone(),
+                package: self.get_package_json(),
                 script: start_script.to_string(),
             });
         }
