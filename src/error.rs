@@ -12,9 +12,6 @@ pub enum ApplicationError {
     #[error("Couldn't parse config file \"{0}\"")]
     ParseConfig(PathBuf),
 
-    #[error("Couldn't read server store file \"{0}\"")]
-    ReadStore(PathBuf),
-
     #[error("Couldn't write server store file \"{0}\"")]
     WriteStore(PathBuf),
 

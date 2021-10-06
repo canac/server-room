@@ -288,9 +288,8 @@ fn main() {
             // Generate user-facing suggestions based on the error
             let suggestion: Option<String> = match &err {
                 ApplicationError::ProjectDirs => None,
-                ApplicationError::ReadConfig(_) => Some("Make sure that the configuration file exists.".to_string()),
-                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid TOML.".to_string()),
-                ApplicationError::ReadStore(_) => Some("Make sure that the server store file exists.".to_string()),
+                ApplicationError::ReadConfig(path) => Some(format!("Try creating a configuration file at {:?}.", path)),
+                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid TOML. Example:\n\nservers_dir = '...'".to_string()),
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
                 ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
                 ApplicationError::StringifyStore => None,

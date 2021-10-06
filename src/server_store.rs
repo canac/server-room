@@ -28,8 +28,8 @@ pub struct RawServerStore {
 impl ServerStore {
     // Load the data store from disk
     pub fn load(store_path: PathBuf, config: Rc<Config>) -> Result<ServerStore, ApplicationError> {
-        let server_store_str = fs::read_to_string(&store_path)
-            .map_err(|_| ApplicationError::ReadStore(store_path.clone()))?;
+        let server_store_str =
+            fs::read_to_string(&store_path).unwrap_or_else(|_| "servers = []".to_string());
         let raw_store: RawServerStore = toml::from_str(&server_store_str)
             .map_err(|_| ApplicationError::ParseStore(store_path.clone()))?;
         Ok(ServerStore {
