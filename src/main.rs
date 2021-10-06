@@ -234,7 +234,8 @@ fn run() -> Result<(), ApplicationError> {
                         .long("force")
                         .requires("server"),
                 ),
-        );
+        )
+        .subcommand(SubCommand::with_name("list").about("Displays all servers"));
     let matches = app.get_matches();
 
     match matches.subcommand_name() {
@@ -316,6 +317,15 @@ fn run() -> Result<(), ApplicationError> {
                 Ok(())
             }
         }
+        Some("list") => {
+            let (_, server_store) = load()?;
+            println!("Servers:");
+            server_store
+                .get_all()
+                .iter()
+                .for_each(|server| println!("{} ({})", server.name, server.start_command));
+            Ok(())
+        }
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
     }
@@ -376,6 +386,7 @@ fn main() {
                     corpus.add_text("edit");
                     corpus.add_text("run");
                     corpus.add_text("remove");
+                    corpus.add_text("list");
                     let results = corpus.search(command.as_str(), 0.5f32);
                     Some(match results.first() {
                         Some(result) => format!("Did you mean `server-room {}`?", result.text),
