@@ -358,7 +358,7 @@ fn main() {
                     let results = corpus.search(script, 0f32);
                     let suggestion = results.first().map(|result| result.text.clone());
                     Some(match suggestion {
-                        Some(suggestion) => format!("Did you mean --start-script {}?", suggestion),
+                        Some(suggestion) => format!("Did you mean `--start-script {}`?", suggestion),
                         None => format!("Try adding the script {} to your package.json.", script)
                     })
                 },
@@ -368,7 +368,7 @@ fn main() {
                         server_store.get_closest_server_name(server)
                     });
                     Some(match suggested_server {
-                        Some(suggestion) => format!("Did you mean --server {}?", suggestion),
+                        Some(suggestion) => format!("Did you mean `--server {}`?", suggestion),
                         None => "Try a different server name.".to_string(),
                     })
                 },

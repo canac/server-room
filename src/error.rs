@@ -56,6 +56,6 @@ pub enum ApplicationError {
     #[error(transparent)]
     InquireError(#[from] inquire::error::InquireError),
 
-    #[error("Invalid command \"{0:?}\"")]
+    #[error("Invalid command \"{0}\"")]
     InvalidCommand(String),
 }
