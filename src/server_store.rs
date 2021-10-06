@@ -60,9 +60,16 @@ impl ServerStore {
         // Sort the servers lexicographically by their name
         servers.sort_by(|server1, server2| server1.name.cmp(&server2.name));
 
-        let raw_store = RawServerStore { servers };
-        let stringified =
-            toml::to_string_pretty(&raw_store).map_err(|_| ApplicationError::StringifyStore)?;
+        let stringified = toml::to_string_pretty(&RawServerStore { servers })
+            .map_err(|_| ApplicationError::StringifyStore)?;
+
+        // Create the parent directory before attempting to write the new store file
+        let parent_dir = self
+            .store_path
+            .parent()
+            .ok_or_else(|| ApplicationError::WriteStore(self.store_path.clone()))?;
+        fs::create_dir_all(parent_dir)
+            .map_err(|_| ApplicationError::WriteStore(self.store_path.clone()))?;
         fs::write(&self.store_path, stringified)
             .map_err(|_| ApplicationError::WriteStore(self.store_path.clone()))?;
         Ok(())
