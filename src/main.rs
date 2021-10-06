@@ -13,7 +13,7 @@ use server_store::ServerStore;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use directories::ProjectDirs;
-use inquire::Select;
+use inquire::{Confirm, Select};
 use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
@@ -117,6 +117,18 @@ fn get_start_command_from_user(
     Ok(format!("npm run {}", start_script))
 }
 
+// Get confirmation to perform the operation from command line argument, falling back to prompting the user for confirmation
+fn get_confirmation_from_user(cli_confirm: bool, prompt: &str) -> Result<bool, ApplicationError> {
+    if cli_confirm {
+        Ok(true)
+    } else {
+        Ok(Confirm::new(prompt)
+            .with_default(false)
+            .prompt_skippable()?
+            .unwrap_or(false))
+    }
+}
+
 fn get_project_dirs() -> Result<ProjectDirs, ApplicationError> {
     ProjectDirs::from("com", "Canac Apps", "Server Room").ok_or(ApplicationError::ProjectDirs)
 }
@@ -186,6 +198,13 @@ fn run() -> Result<(), ApplicationError> {
                         .takes_value(true)
                         .long("start-script")
                         .requires("server"),
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .help("Don't prompt for confirmation")
+                        .short("f")
+                        .long("force")
+                        .requires("start-script"),
                 ),
         )
         .subcommand(
@@ -207,6 +226,13 @@ fn run() -> Result<(), ApplicationError> {
                         .takes_value(true)
                         .short("s")
                         .long("server"),
+                )
+                .arg(
+                    Arg::with_name("force")
+                        .help("Don't prompt for confirmation")
+                        .short("f")
+                        .long("force")
+                        .requires("server"),
                 ),
         );
     let matches = app.get_matches();
@@ -254,7 +280,14 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("start-script"),
                 "Pick a new start script",
             )?;
-            server_store.set_server_start_command(&server.name, start_command)
+            if get_confirmation_from_user(
+                options.is_present("force"),
+                "Are you sure you want to change the server's start script?",
+            )? {
+                server_store.set_server_start_command(&server.name, start_command)
+            } else {
+                Ok(())
+            }
         }
         Some("run") => {
             let (_, server_store) = load()?;
@@ -274,7 +307,14 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("server"),
                 "Pick a server to remove",
             )?;
-            server_store.remove_server(&server.name)
+            if get_confirmation_from_user(
+                options.is_present("force"),
+                "Are you sure you want to remove the server?",
+            )? {
+                server_store.remove_server(&server.name)
+            } else {
+                Ok(())
+            }
         }
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
