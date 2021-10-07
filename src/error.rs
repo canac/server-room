@@ -31,12 +31,8 @@ pub enum ApplicationError {
     #[error("Malformed package.json file \"{path}\": {cause}")]
     MalformedPackageJson { path: PathBuf, cause: String },
 
-    #[error("Script \"{script}\" doesn't exist in \"{package}\"")]
-    NonExistentScript {
-        project: Project,
-        package: PathBuf,
-        script: String,
-    },
+    #[error("Script \"{script}\" doesn't exist in \"{:?}\"", .project.get_package_json())]
+    NonExistentScript { project: Project, script: String },
 
     #[error("Couldn't execute command \"{0}\"")]
     RunScript(String),

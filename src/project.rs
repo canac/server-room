@@ -75,7 +75,6 @@ impl Project {
         if !scripts.iter().any(|script| script.name == start_script) {
             return Err(ApplicationError::NonExistentScript {
                 project: self.clone(),
-                package: self.get_package_json(),
                 script: start_script.to_string(),
             });
         }
@@ -84,7 +83,7 @@ impl Project {
     }
 
     // Return the path to the project's package.json file
-    fn get_package_json(&self) -> PathBuf {
+    pub fn get_package_json(&self) -> PathBuf {
         self.dir.join("package.json")
     }
 }

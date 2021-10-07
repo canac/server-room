@@ -352,7 +352,6 @@ fn main() {
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
                 ApplicationError::NonExistentScript {
                     project,
-                    package: _,
                     script,
                 } => {
                     let mut corpus = CorpusBuilder::new().finish();
