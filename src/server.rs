@@ -1,19 +1,12 @@
-use super::config::Config;
 use super::error::ApplicationError;
+use super::project::Project;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
 use std::process::Command;
 
-// This struct represents the server as stored in the server store
-#[derive(Deserialize, Serialize)]
-pub struct RawServer {
-    pub name: String,
-    pub start_command: String,
-    pub frecency: f64,
-}
 // This struct represents the server as used by the rest of the application
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Server {
     pub name: String,
     pub dir: PathBuf,
@@ -29,32 +22,18 @@ impl fmt::Display for Server {
 
 impl Server {
     // Create a new server
-    pub fn new(config: &Config, name: String, start_command: String) -> Self {
+    pub fn new(name: String, dir: PathBuf, start_command: String) -> Self {
         Server {
-            name: name.clone(),
-            dir: config.get_servers_dir().join(name),
+            name,
+            dir,
             start_command,
             frecency: 0f64,
         }
     }
 
-    // Create a new server from a raw server
-    pub fn from_raw(config: &Config, raw: RawServer) -> Self {
-        Server {
-            name: raw.name.clone(),
-            dir: config.get_servers_dir().join(raw.name),
-            start_command: raw.start_command,
-            frecency: raw.frecency,
-        }
-    }
-
-    // Create a new server from a raw server
-    pub fn into_raw(self) -> RawServer {
-        RawServer {
-            name: self.name,
-            start_command: self.start_command,
-            frecency: self.frecency,
-        }
+    // Create a new server from a project
+    pub fn from_project(project: Project, start_command: String) -> Self {
+        Self::new(project.name, project.dir, start_command)
     }
 
     // Calculate the likelihood that this server will be used again

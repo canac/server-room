@@ -1,7 +1,7 @@
 use super::config::Config;
 use super::error::ApplicationError;
 use super::project::Project;
-use super::server::{RawServer, Server};
+use super::server::Server;
 use ngrammatic::CorpusBuilder;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::LN_2;
@@ -22,7 +22,7 @@ pub struct ServerStore {
 
 #[derive(Deserialize, Serialize)]
 pub struct RawServerStore {
-    servers: Vec<RawServer>,
+    servers: Vec<Server>,
 }
 
 impl ServerStore {
@@ -36,12 +36,7 @@ impl ServerStore {
             servers: raw_store
                 .servers
                 .into_iter()
-                .map(|raw_server| {
-                    (
-                        raw_server.name.clone(),
-                        Server::from_raw(&*config, raw_server),
-                    )
-                })
+                .map(|server| (server.name.clone(), server))
                 .collect(),
             config,
             store_path,
@@ -50,12 +45,7 @@ impl ServerStore {
 
     // Write the data store to disk
     pub fn flush(&self) -> Result<(), ApplicationError> {
-        let mut servers = self
-            .servers
-            .clone()
-            .into_values()
-            .map(|server| server.into_raw())
-            .collect::<Vec<_>>();
+        let mut servers = self.servers.clone().into_values().collect::<Vec<_>>();
 
         // Sort the servers lexicographically by their name
         servers.sort_by(|server1, server2| server1.name.cmp(&server2.name));
@@ -87,7 +77,7 @@ impl ServerStore {
         }
 
         let mut new_store = self.clone();
-        let server = Server::new(self.config.as_ref(), project.name.clone(), start_command);
+        let server = Server::from_project(project.clone(), start_command);
         new_store.servers.insert(project.name.clone(), server);
         new_store.flush()
     }
