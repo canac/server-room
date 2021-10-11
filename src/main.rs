@@ -11,7 +11,7 @@ use project::Project;
 use server::Server;
 use server_store::ServerStore;
 
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
 use colored::*;
 use directories::ProjectDirs;
 use inquire::{Confirm, Select};
@@ -168,19 +168,27 @@ fn run() -> Result<(), ApplicationError> {
             SubCommand::with_name("add")
                 .about("Adds a new server")
                 .arg(
-                    Arg::with_name("project-name")
-                        .help("Specifies the project name")
+                    Arg::with_name("path")
+                        .help("Specifies the project path")
                         .takes_value(true)
                         .short("p")
-                        .long("project-name"),
+                        .long("path"),
                 )
+                .arg(
+                    Arg::with_name("name")
+                        .help("Specifies the project name")
+                        .takes_value(true)
+                        .short("n")
+                        .long("name"),
+                )
+                .group(ArgGroup::with_name("project").args(&["path", "name"]))
                 .arg(
                     Arg::with_name("start-script")
                         .help("Sets the new server's start script")
                         .takes_value(true)
                         .short("s")
                         .long("start-script")
-                        .requires("project-name"),
+                        .requires("project"),
                 ),
         )
         .subcommand(
@@ -257,9 +265,15 @@ fn run() -> Result<(), ApplicationError> {
         Some("add") => {
             let (config, server_store) = load()?;
             let options = matches.subcommand_matches("add").unwrap();
-            let project = match options.value_of("project-name") {
-                Some(project_name) => Project::from_name(&config, project_name.to_string()),
-                None => choose_new_project(config, &server_store),
+            let project = if let Some(path) = options.value_of("path") {
+                let absolute_path = fs::canonicalize(path)
+                    .map_err(|_| ApplicationError::ParsePath(PathBuf::from(path)))?;
+                Project::from_path(absolute_path)
+            } else {
+                match options.value_of("name") {
+                    Some(project_name) => Project::from_name(&config, project_name.to_string()),
+                    None => choose_new_project(config, &server_store),
+                }
             }?;
             let start_command = get_start_command_from_user(
                 &project,
@@ -276,7 +290,7 @@ fn run() -> Result<(), ApplicationError> {
                 options.value_of("server"),
                 "Pick a server to edit",
             )?;
-            let project = Project::from_name(&config, server.name.clone())?;
+            let project = Project::from_path(server.get_project_dir())?;
             let start_command = get_start_command_from_user(
                 &project,
                 options.value_of("start-script"),
@@ -350,6 +364,7 @@ fn main() {
                 ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
+                ApplicationError::ParsePath(_) => None,
                 ApplicationError::NonExistentScript {
                     project,
                     script,

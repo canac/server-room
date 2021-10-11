@@ -20,11 +20,17 @@ impl fmt::Display for Project {
 }
 
 impl Project {
-    // Try to create a project based on a name
-    pub fn from_name(config: &Config, project_name: String) -> Result<Self, ApplicationError> {
+    // Try to create a project based on a path
+    pub fn from_path(project_path: PathBuf) -> Result<Self, ApplicationError> {
+        let name = project_path
+            .file_name()
+            .ok_or_else(|| ApplicationError::ParsePath(project_path.clone()))?
+            .to_str()
+            .ok_or_else(|| ApplicationError::ParsePath(project_path.clone()))?
+            .to_string();
         let project = Project {
-            name: project_name.clone(),
-            dir: config.get_servers_dir().join(project_name),
+            name,
+            dir: project_path,
         };
         let package_json_path = project.get_package_json();
         let metadata = fs::metadata(&package_json_path)
@@ -35,6 +41,11 @@ impl Project {
         }
 
         Ok(project)
+    }
+
+    // Try to create a project based on a name
+    pub fn from_name(config: &Config, project_name: String) -> Result<Self, ApplicationError> {
+        Project::from_path(config.get_servers_dir().join(project_name))
     }
 
     // Return a vector of the project's start scripts

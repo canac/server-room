@@ -31,6 +31,9 @@ pub enum ApplicationError {
     #[error("Malformed package.json file \"{path}\": {cause}")]
     MalformedPackageJson { path: PathBuf, cause: String },
 
+    #[error("Couldn't parse path \"{0}\"")]
+    ParsePath(PathBuf),
+
     #[error("Script \"{script}\" doesn't exist in \"{:?}\"", .project.get_package_json())]
     NonExistentScript { project: Project, script: String },
 
