@@ -1,4 +1,3 @@
-use super::config::Config;
 use super::error::ApplicationError;
 use super::project::Project;
 use super::server::Server;
@@ -7,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::f64::consts::LN_2;
 use std::fs;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // This struct represents the user-configured servers used by the rest of the application
@@ -16,7 +14,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Clone)]
 pub struct ServerStore {
     servers: std::collections::HashMap<String, Server>,
-    config: Rc<Config>,
     store_path: PathBuf,
 }
 
@@ -27,7 +24,7 @@ pub struct RawServerStore {
 
 impl ServerStore {
     // Load the data store from disk
-    pub fn load(store_path: PathBuf, config: Rc<Config>) -> Result<ServerStore, ApplicationError> {
+    pub fn load(store_path: PathBuf) -> Result<ServerStore, ApplicationError> {
         let server_store_str =
             fs::read_to_string(&store_path).unwrap_or_else(|_| "servers = []".to_string());
         let raw_store: RawServerStore = toml::from_str(&server_store_str)
@@ -38,7 +35,6 @@ impl ServerStore {
                 .into_iter()
                 .map(|server| (server.name.clone(), server))
                 .collect(),
-            config,
             store_path,
         })
     }

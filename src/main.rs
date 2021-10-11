@@ -174,13 +174,6 @@ fn get_store_path() -> Result<PathBuf, ApplicationError> {
         .join(PathBuf::from("servers.toml")))
 }
 
-// Load the configuration and server store
-fn load() -> Result<(Rc<Config>, ServerStore), ApplicationError> {
-    let config = Rc::new(Config::load(get_config_path()?)?);
-    let server_store = ServerStore::load(get_store_path()?, config.clone())?;
-    Ok((config, server_store))
-}
-
 fn run() -> Result<(), ApplicationError> {
     let app = App::new("server-room")
         // Allow invalid subcommands because we suggest the correct one
@@ -297,7 +290,8 @@ fn run() -> Result<(), ApplicationError> {
             Ok(())
         }
         Some("add") => {
-            let (config, server_store) = load()?;
+            let config = load_config()?;
+            let server_store = load_store()?;
             let options = matches.subcommand_matches("add").unwrap();
             let mut project = if let Some(path) = options.value_of("path") {
                 let absolute_path = fs::canonicalize(path)
@@ -306,7 +300,7 @@ fn run() -> Result<(), ApplicationError> {
             } else {
                 match options.value_of("name") {
                     Some(project_name) => Project::from_name(&config, project_name.to_string()),
-                    None => choose_new_project(config, &server_store),
+                    None => choose_new_project(Rc::new(config), &server_store),
                 }
             }?;
 
@@ -320,7 +314,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.add_server(&project, start_command)
         }
         Some("edit") => {
-            let (config, server_store) = load()?;
+            let server_store = load_store()?;
             let options = matches.subcommand_matches("edit").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -343,7 +337,7 @@ fn run() -> Result<(), ApplicationError> {
             }
         }
         Some("run") => {
-            let (_, server_store) = load()?;
+            let server_store = load_store()?;
             let options = matches.subcommand_matches("run").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -353,7 +347,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.start_server(&server.name)
         }
         Some("remove") => {
-            let (_, server_store) = load()?;
+            let server_store = load_store()?;
             let options = matches.subcommand_matches("remove").unwrap();
             let server = get_existing_server_from_user(
                 &server_store,
@@ -370,7 +364,7 @@ fn run() -> Result<(), ApplicationError> {
             }
         }
         Some("list") => {
-            let (_, server_store) = load()?;
+            let server_store = load_store()?;
             println!("{}", "Servers:".bold());
             server_store.get_all().iter().for_each(|server| {
                 println!(
@@ -384,6 +378,16 @@ fn run() -> Result<(), ApplicationError> {
         Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
         None => panic!("No command specified"),
     }
+}
+
+// Load the configuration
+fn load_config() -> Result<Config, ApplicationError> {
+    Config::load(get_config_path()?)
+}
+
+// Load the server store
+fn load_store() -> Result<ServerStore, ApplicationError> {
+    ServerStore::load(get_store_path()?)
 }
 
 fn main() {
@@ -419,7 +423,7 @@ fn main() {
                 },
                 ApplicationError::RunScript(_) => Some("Make sure that the command is spelled correctly and is in the path.".to_string()),
                 ApplicationError::NonExistentServer(server) => {
-                    let suggested_server = load().ok().and_then(|(_, server_store)| {
+                    let suggested_server = load_store().ok().and_then(|server_store| {
                         server_store.get_closest_server_name(server)
                     });
                     Some(match suggested_server {
