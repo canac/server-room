@@ -14,7 +14,7 @@ use server_store::ServerStore;
 use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
 use colored::*;
 use directories::ProjectDirs;
-use inquire::{Confirm, Select};
+use inquire::{Confirm, Select, Text};
 use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
@@ -85,6 +85,32 @@ fn get_existing_server_from_user<'s>(
                 .map_err(ApplicationError::from)
         }
     }
+}
+
+// Get an alias for the project if necessary from the command line argument, falling back to letting the user pick one
+// An alias is only necessary if the project has the name name as an existing project
+fn get_alias_from_user(
+    server_store: &ServerStore,
+    project: &Project,
+    cli_alias: Option<&str>,
+) -> Result<String, ApplicationError> {
+    // Get an alias from the user if a server with this name already exists
+    let mut alias = cli_alias.unwrap_or(&project.name).to_string();
+    loop {
+        // Loop until an unused server name is provided
+        if server_store.get_one(alias.as_str()).is_ok() {
+            alias = Text::new("Choose an alias")
+                .with_help_message(
+                    "A server with this name already exists, so the new server must be aliased.",
+                )
+                .prompt()
+                .map_err(ApplicationError::from)?;
+        } else {
+            break;
+        }
+    }
+
+    Ok(alias)
 }
 
 // Get the start command from the script name command line argument, falling back to letting the user interactively pick one
@@ -183,6 +209,14 @@ fn run() -> Result<(), ApplicationError> {
                 )
                 .group(ArgGroup::with_name("project").args(&["path", "name"]))
                 .arg(
+                    Arg::with_name("alias")
+                        .help("Specifies the project alias")
+                        .takes_value(true)
+                        .short("a")
+                        .long("alias")
+                        .requires("project"),
+                )
+                .arg(
                     Arg::with_name("start-script")
                         .help("Sets the new server's start script")
                         .takes_value(true)
@@ -265,7 +299,7 @@ fn run() -> Result<(), ApplicationError> {
         Some("add") => {
             let (config, server_store) = load()?;
             let options = matches.subcommand_matches("add").unwrap();
-            let project = if let Some(path) = options.value_of("path") {
+            let mut project = if let Some(path) = options.value_of("path") {
                 let absolute_path = fs::canonicalize(path)
                     .map_err(|_| ApplicationError::ParsePath(PathBuf::from(path)))?;
                 Project::from_path(absolute_path)
@@ -275,6 +309,9 @@ fn run() -> Result<(), ApplicationError> {
                     None => choose_new_project(config, &server_store),
                 }
             }?;
+
+            project.name = get_alias_from_user(&server_store, &project, options.value_of("alias"))?;
+
             let start_command = get_start_command_from_user(
                 &project,
                 options.value_of("start-script"),
