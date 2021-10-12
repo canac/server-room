@@ -134,7 +134,7 @@ fn run() -> Result<(), ApplicationError> {
         .version("0.1.0")
         .author("Caleb Cox")
         .about("Runs dev servers")
-        .subcommand(SubCommand::with_name("cargo").about("Displays configuration"))
+        .subcommand(SubCommand::with_name("config").about("Displays configuration"))
         .subcommand(
             SubCommand::with_name("add")
                 .about("Adds a new server")
