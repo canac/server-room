@@ -1,4 +1,3 @@
-use super::config::Config;
 use super::error::ApplicationError;
 use super::script::Script;
 use serde_json::Value;
@@ -41,11 +40,6 @@ impl Project {
         }
 
         Ok(project)
-    }
-
-    // Try to create a project based on a name
-    pub fn from_name(config: &Config, project_name: String) -> Result<Self, ApplicationError> {
-        Project::from_path(config.get_servers_dir().join(project_name))
     }
 
     // Return a vector of the project's start scripts

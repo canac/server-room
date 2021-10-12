@@ -1,17 +1,15 @@
-mod config;
 mod error;
 mod project;
 mod script;
 mod server;
 mod server_store;
 
-use config::Config;
 use error::ApplicationError;
 use project::Project;
 use server::Server;
 use server_store::ServerStore;
 
-use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 use colored::*;
 use directories::ProjectDirs;
 use inquire::{Confirm, Select, Text};
@@ -20,41 +18,6 @@ use std::collections::HashSet;
 use std::fs;
 use std::iter::FromIterator;
 use std::path::PathBuf;
-use std::rc::Rc;
-
-// Let the user interactively choose a new project
-fn choose_new_project(
-    config: Rc<Config>,
-    server_store: &ServerStore,
-) -> Result<Project, ApplicationError> {
-    // If no project name was provided, let the user pick one
-    let mut projects = fs::read_dir(&config.get_servers_dir())
-        .map_err(|_| ApplicationError::ReadServersDir(config.get_servers_dir()))?
-        .filter_map(|result| {
-            if let Ok(dir_entry) = result {
-                let file_name = dir_entry.file_name();
-                let project_name = file_name.to_str()?;
-                if server_store.get_one(project_name).is_ok() {
-                    // Ignore this project because it is already a server
-                    return None;
-                }
-
-                return Project::from_name(&config, project_name.to_string()).ok();
-            }
-
-            None
-        })
-        .collect::<Vec<_>>();
-    projects.sort_by(|project1, project2| project1.name.cmp(&project2.name));
-
-    if projects.is_empty() {
-        return Err(ApplicationError::NoNewProjects(config.get_servers_dir()));
-    }
-
-    Select::new("Pick a project", projects)
-        .prompt()
-        .map_err(ApplicationError::from)
-}
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
 fn get_existing_server_from_user<'s>(
@@ -156,22 +119,11 @@ fn get_confirmation_from_user(cli_confirm: bool, prompt: &str) -> Result<bool, A
     }
 }
 
-fn get_project_dirs() -> Result<ProjectDirs, ApplicationError> {
-    ProjectDirs::from("com", "Canac Apps", "Server Room").ok_or(ApplicationError::ProjectDirs)
-}
-
-// Return the path to the config file
-fn get_config_path() -> Result<PathBuf, ApplicationError> {
-    Ok(get_project_dirs()?
-        .config_dir()
-        .join(PathBuf::from("config.toml")))
-}
-
 // Return the path to the server store file
 fn get_store_path() -> Result<PathBuf, ApplicationError> {
-    Ok(get_project_dirs()?
-        .data_dir()
-        .join(PathBuf::from("servers.toml")))
+    let project_dirs = ProjectDirs::from("com", "Canac Apps", "Server Room")
+        .ok_or(ApplicationError::ProjectDirs)?;
+    Ok(project_dirs.data_dir().join(PathBuf::from("servers.toml")))
 }
 
 fn run() -> Result<(), ApplicationError> {
@@ -189,33 +141,21 @@ fn run() -> Result<(), ApplicationError> {
                 .arg(
                     Arg::with_name("path")
                         .help("Specifies the project path")
-                        .takes_value(true)
-                        .short("p")
-                        .long("path"),
+                        .required(true),
                 )
-                .arg(
-                    Arg::with_name("name")
-                        .help("Specifies the project name")
-                        .takes_value(true)
-                        .short("n")
-                        .long("name"),
-                )
-                .group(ArgGroup::with_name("project").args(&["path", "name"]))
                 .arg(
                     Arg::with_name("alias")
                         .help("Specifies the project alias")
                         .takes_value(true)
                         .short("a")
-                        .long("alias")
-                        .requires("project"),
+                        .long("alias"),
                 )
                 .arg(
                     Arg::with_name("start-script")
                         .help("Sets the new server's start script")
                         .takes_value(true)
                         .short("s")
-                        .long("start-script")
-                        .requires("project"),
+                        .long("start-script"),
                 ),
         )
         .subcommand(
@@ -276,34 +216,17 @@ fn run() -> Result<(), ApplicationError> {
 
     match matches.subcommand_name() {
         Some("config") => {
-            // Display the config and server store paths without actually loading the config because the load might fail
-            // if they don't exist or are malformed
-            let config_path = get_config_path()?;
-            println!(
-                "Configuration file path: {:?}\nServer store path: {:?}",
-                config_path,
-                get_store_path()?
-            );
-            if let Ok(config) = Config::load(config_path) {
-                println!("servers directory: {:?}", config.get_servers_dir())
-            }
+            println!("Server store path: {:?}", get_store_path()?);
             Ok(())
         }
         Some("add") => {
-            let config = load_config()?;
             let server_store = load_store()?;
             let options = matches.subcommand_matches("add").unwrap();
-            let mut project = if let Some(path) = options.value_of("path") {
-                let absolute_path = fs::canonicalize(path)
-                    .map_err(|_| ApplicationError::ParsePath(PathBuf::from(path)))?;
-                Project::from_path(absolute_path)
-            } else {
-                match options.value_of("name") {
-                    Some(project_name) => Project::from_name(&config, project_name.to_string()),
-                    None => choose_new_project(Rc::new(config), &server_store),
-                }
-            }?;
+            let path = options.value_of("path").unwrap();
+            let absolute_path = fs::canonicalize(path)
+                .map_err(|_| ApplicationError::ParsePath(PathBuf::from(path)))?;
 
+            let mut project = Project::from_path(absolute_path)?;
             project.name = get_alias_from_user(&server_store, &project, options.value_of("alias"))?;
 
             let start_command = get_start_command_from_user(
@@ -380,11 +303,6 @@ fn run() -> Result<(), ApplicationError> {
     }
 }
 
-// Load the configuration
-fn load_config() -> Result<Config, ApplicationError> {
-    Config::load(get_config_path()?)
-}
-
 // Load the server store
 fn load_store() -> Result<ServerStore, ApplicationError> {
     ServerStore::load(get_store_path()?)
@@ -397,12 +315,9 @@ fn main() {
             // Generate user-facing suggestions based on the error
             let suggestion: Option<String> = match &err {
                 ApplicationError::ProjectDirs => None,
-                ApplicationError::ReadConfig(path) => Some(format!("Try creating a configuration file at {:?}.", path)),
-                ApplicationError::ParseConfig(_) => Some("Make sure that the configuration file is valid TOML. Example:\n\nservers_dir = '...'".to_string()),
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
                 ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
                 ApplicationError::StringifyStore => None,
-                ApplicationError::ReadServersDir(_) => Some("Try setting `servers_dir` in the configuration to the directory where your servers are.".to_string()),
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
                 ApplicationError::ParsePath(_) => None,
@@ -435,7 +350,6 @@ fn main() {
                     "Try editing the existing server instead.\n\n    {}",
                     format!("server-room edit --server {}", server).bold().cyan()
                 )),
-                ApplicationError::NoNewProjects(servers_dir) => Some(format!("Try creating a new project in \"{:?}\" first.", servers_dir)),
                 ApplicationError::NoServers => Some("Try adding a new server first.\n\n    server-room add".to_string()),
                 ApplicationError::InquireError(_) => None,
                 ApplicationError::InvalidCommand(command) => {

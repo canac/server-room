@@ -7,12 +7,6 @@ pub enum ApplicationError {
     #[error("Couldn't determine application directories")]
     ProjectDirs,
 
-    #[error("Couldn't read config file \"{0}\"")]
-    ReadConfig(PathBuf),
-
-    #[error("Couldn't parse config file \"{0}\"")]
-    ParseConfig(PathBuf),
-
     #[error("Couldn't write server store file \"{0}\"")]
     WriteStore(PathBuf),
 
@@ -21,9 +15,6 @@ pub enum ApplicationError {
 
     #[error("Couldn't stringify server store")]
     StringifyStore,
-
-    #[error("Couldn't read servers directory \"{0}\"")]
-    ReadServersDir(PathBuf),
 
     #[error("Could not read file \"{0}\"")]
     ReadPackageJson(PathBuf),
@@ -45,9 +36,6 @@ pub enum ApplicationError {
 
     #[error("Server \"{0}\" already exists")]
     DuplicateServer(String),
-
-    #[error("Servers directory \"{0}\" only contains existing servers")]
-    NoNewProjects(PathBuf),
 
     #[error("No servers have been added yet")]
     NoServers,
