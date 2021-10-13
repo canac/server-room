@@ -202,7 +202,7 @@ fn main() {
             let suggestion: Option<String> = match &err {
                 ApplicationError::ProjectDirs => None,
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
-                ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
+                ApplicationError::ParseStore(_) => Some("Make sure that the server store file contains valid TOML.".to_string()),
                 ApplicationError::StringifyStore => None,
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
                 ApplicationError::MalformedPackageJson { .. } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
