@@ -67,15 +67,34 @@ impl ServerStore {
         project: &Project,
         start_command: String,
     ) -> Result<(), ApplicationError> {
-        // Make sure the project doesn't already exist
-        if self.servers.contains_key(&project.name) {
-            return Err(ApplicationError::DuplicateServer(project.name.clone()));
-        }
+        // Don't add the project if it doesn't validate
+        self.validate_new_project(project)?;
 
         let mut new_store = self.clone();
         let server = Server::from_project(project.clone(), start_command);
         new_store.servers.insert(project.name.clone(), server);
         new_store.flush()
+    }
+
+    // Check whether the project is a valid new project
+    // Checks whether the name and directory are unique
+    pub fn validate_new_project(&self, project: &Project) -> Result<(), ApplicationError> {
+        if self.servers.contains_key(&project.name) {
+            return Err(ApplicationError::DuplicateServerName(project.name.clone()));
+        }
+
+        if let Some(existing) = self
+            .servers
+            .values()
+            .find(|server| server.dir == project.dir)
+        {
+            return Err(ApplicationError::DuplicateServerDir {
+                dir: project.dir.clone(),
+                existing: existing.clone(),
+            });
+        }
+
+        Ok(())
     }
 
     // Permanently set the start command of the specified server

@@ -17,8 +17,8 @@ pub enum Cli {
     Add {
         #[structopt(parse(from_os_str), about = "Specifies the project path")]
         path: PathBuf,
-        #[structopt(short, long, about = "Specifies the project alias")]
-        alias: Option<String>,
+        #[structopt(short, long, about = "Specifies the project name")]
+        name: Option<String>,
         #[structopt(short, long, about = "Specifies the new server's start script")]
         start_script: Option<String>,
     },

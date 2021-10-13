@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 // This struct represents the server as used by the rest of the application
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Server {
     pub name: String,
     pub dir: PathBuf,

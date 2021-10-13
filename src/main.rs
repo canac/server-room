@@ -13,7 +13,7 @@ use server_store::ServerStore;
 
 use colored::*;
 use directories::ProjectDirs;
-use inquire::{Confirm, Select, Text};
+use inquire::{Confirm, Select};
 use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
@@ -50,32 +50,6 @@ fn get_existing_server_from_user<'s>(
                 .map_err(ApplicationError::from)
         }
     }
-}
-
-// Get an alias for the project if necessary from the command line argument, falling back to letting the user pick one
-// An alias is only necessary if the project has the name name as an existing project
-fn get_alias_from_user(
-    server_store: &ServerStore,
-    project: &Project,
-    cli_alias: Option<String>,
-) -> Result<String, ApplicationError> {
-    // Get an alias from the user if a server with this name already exists
-    let mut alias = cli_alias.unwrap_or_else(|| project.name.clone());
-    loop {
-        // Loop until an unused server name is provided
-        if server_store.get_one(alias.as_str()).is_ok() {
-            alias = Text::new("Choose an alias")
-                .with_help_message(
-                    "A server with this name already exists, so the new server must be aliased.",
-                )
-                .prompt()
-                .map_err(ApplicationError::from)?;
-        } else {
-            break;
-        }
-    }
-
-    Ok(alias)
 }
 
 // Get the start command from the script name command line argument, falling back to letting the user interactively pick one
@@ -138,15 +112,21 @@ fn run() -> Result<(), ApplicationError> {
 
         Cli::Add {
             path,
-            alias,
+            name,
             start_script,
         } => {
             let server_store = load_store()?;
             let absolute_path =
                 fs::canonicalize(path.clone()).map_err(|_| ApplicationError::ParsePath(path))?;
-
             let mut project = Project::from_path(absolute_path)?;
-            project.name = get_alias_from_user(&server_store, &project, alias)?;
+
+            // Change the default name if one is provided
+            if let Some(name) = name {
+                project.name = name;
+            }
+
+            // Abort if the project is invalid before prompting the user for the start command
+            server_store.validate_new_project(&project)?;
 
             let start_command =
                 get_start_command_from_user(&project, start_script, "Pick a start script")?;
@@ -225,7 +205,7 @@ fn main() {
                 ApplicationError::ParseStore(_) => Some("Make sure that the server store file is valid TOML.".to_string()),
                 ApplicationError::StringifyStore => None,
                 ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
-                ApplicationError::MalformedPackageJson { path: _, cause: _ } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
+                ApplicationError::MalformedPackageJson { .. } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
                 ApplicationError::ParsePath(_) => None,
                 ApplicationError::NonExistentScript {
                     project,
@@ -252,9 +232,10 @@ fn main() {
                         None => "Try a different server name.".to_string(),
                     })
                 },
-                ApplicationError::DuplicateServer(server) => Some(format!(
+                ApplicationError::DuplicateServerName(_) => Some(format!("Try giving the new server a unique name with `{}`", "--name".bold().cyan())),
+                ApplicationError::DuplicateServerDir { existing, .. } => Some(format!(
                     "Try editing the existing server instead.\n\n    {}",
-                    format!("server-room edit --server {}", server).bold().cyan()
+                    format!("server-room edit --server {}", existing.name).bold().cyan()
                 )),
                 ApplicationError::NoServers => Some("Try adding a new server first.\n\n    server-room add".to_string()),
                 ApplicationError::InquireError(_) => None,

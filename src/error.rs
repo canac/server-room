@@ -1,4 +1,5 @@
 use super::project::Project;
+use super::server::Server;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -34,8 +35,11 @@ pub enum ApplicationError {
     #[error("Server \"{0}\" don't exist")]
     NonExistentServer(String),
 
-    #[error("Server \"{0}\" already exists")]
-    DuplicateServer(String),
+    #[error("Server with name \"{0}\" already exists")]
+    DuplicateServerName(String),
+
+    #[error("Server at \"{dir}\" already exists")]
+    DuplicateServerDir { dir: PathBuf, existing: Server },
 
     #[error("No servers have been added yet")]
     NoServers,
