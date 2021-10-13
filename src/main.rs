@@ -1,15 +1,16 @@
+mod cli;
 mod error;
 mod project;
 mod script;
 mod server;
 mod server_store;
 
+use cli::Cli;
 use error::ApplicationError;
 use project::Project;
 use server::Server;
 use server_store::ServerStore;
 
-use clap::{App, AppSettings, Arg, SubCommand};
 use colored::*;
 use directories::ProjectDirs;
 use inquire::{Confirm, Select, Text};
@@ -18,15 +19,16 @@ use std::collections::HashSet;
 use std::fs;
 use std::iter::FromIterator;
 use std::path::PathBuf;
+use structopt::StructOpt;
 
 // Get an existing server from the command line argument, falling back to letting the user interactively pick one
 fn get_existing_server_from_user<'s>(
     server_store: &'s ServerStore,
-    cli_server_name: Option<&str>,
+    cli_server_name: Option<String>,
     prompt: &str,
 ) -> Result<&'s Server, ApplicationError> {
     match cli_server_name {
-        Some(server_name) => server_store.get_one(server_name),
+        Some(server_name) => server_store.get_one(server_name.as_str()),
         None => {
             // If no server was provided, let the user pick one
             let mut servers = server_store.get_all();
@@ -55,10 +57,10 @@ fn get_existing_server_from_user<'s>(
 fn get_alias_from_user(
     server_store: &ServerStore,
     project: &Project,
-    cli_alias: Option<&str>,
+    cli_alias: Option<String>,
 ) -> Result<String, ApplicationError> {
     // Get an alias from the user if a server with this name already exists
-    let mut alias = cli_alias.unwrap_or(&project.name).to_string();
+    let mut alias = cli_alias.unwrap_or_else(|| project.name.clone());
     loop {
         // Loop until an unused server name is provided
         if server_store.get_one(alias.as_str()).is_ok() {
@@ -79,14 +81,14 @@ fn get_alias_from_user(
 // Get the start command from the script name command line argument, falling back to letting the user interactively pick one
 fn get_start_command_from_user(
     project: &Project,
-    cli_start_script: Option<&str>,
+    cli_start_script: Option<String>,
     prompt: &str,
 ) -> Result<String, ApplicationError> {
     let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
-            project.validate_start_script(start_script)?;
-            start_script.to_string()
+            project.validate_start_script(start_script.as_str())?;
+            start_script
         }
         None => {
             // If no start script was provided, let the user pick one
@@ -127,131 +129,43 @@ fn get_store_path() -> Result<PathBuf, ApplicationError> {
 }
 
 fn run() -> Result<(), ApplicationError> {
-    let app = App::new("server-room")
-        // Allow invalid subcommands because we suggest the correct one
-        .setting(AppSettings::AllowExternalSubcommands)
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .version("0.1.0")
-        .author("Caleb Cox")
-        .about("Runs dev servers")
-        .subcommand(SubCommand::with_name("config").about("Displays configuration"))
-        .subcommand(
-            SubCommand::with_name("add")
-                .about("Adds a new server")
-                .arg(
-                    Arg::with_name("path")
-                        .help("Specifies the project path")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("alias")
-                        .help("Specifies the project alias")
-                        .takes_value(true)
-                        .short("a")
-                        .long("alias"),
-                )
-                .arg(
-                    Arg::with_name("start-script")
-                        .help("Sets the new server's start script")
-                        .takes_value(true)
-                        .short("s")
-                        .long("start-script"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("edit")
-                .about("Changes a server's start script")
-                .arg(
-                    Arg::with_name("server")
-                        .help("Specifies the server to edit")
-                        .takes_value(true)
-                        .short("s")
-                        .long("server"),
-                )
-                .arg(
-                    Arg::with_name("start-script")
-                        .help("Sets the server's new start script")
-                        .takes_value(true)
-                        .long("start-script")
-                        .requires("server"),
-                )
-                .arg(
-                    Arg::with_name("force")
-                        .help("Don't prompt for confirmation")
-                        .short("f")
-                        .long("force")
-                        .requires("start-script"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("run").about("Runs a server").arg(
-                Arg::with_name("server")
-                    .help("Specifies the server to run")
-                    .takes_value(true)
-                    .short("s")
-                    .long("server"),
-            ),
-        )
-        .subcommand(
-            SubCommand::with_name("remove")
-                .about("Removes a server")
-                .alias("rm")
-                .arg(
-                    Arg::with_name("server")
-                        .help("Specifies the server to remove")
-                        .takes_value(true)
-                        .short("s")
-                        .long("server"),
-                )
-                .arg(
-                    Arg::with_name("force")
-                        .help("Don't prompt for confirmation")
-                        .short("f")
-                        .long("force")
-                        .requires("server"),
-                ),
-        )
-        .subcommand(SubCommand::with_name("list").about("Displays all servers"));
-    let matches = app.get_matches();
-
-    match matches.subcommand_name() {
-        Some("config") => {
+    let cli = Cli::from_args();
+    match cli {
+        Cli::Config => {
             println!("Server store path: {:?}", get_store_path()?);
             Ok(())
         }
-        Some("add") => {
+
+        Cli::Add {
+            path,
+            alias,
+            start_script,
+        } => {
             let server_store = load_store()?;
-            let options = matches.subcommand_matches("add").unwrap();
-            let path = options.value_of("path").unwrap();
-            let absolute_path = fs::canonicalize(path)
-                .map_err(|_| ApplicationError::ParsePath(PathBuf::from(path)))?;
+            let absolute_path =
+                fs::canonicalize(path.clone()).map_err(|_| ApplicationError::ParsePath(path))?;
 
             let mut project = Project::from_path(absolute_path)?;
-            project.name = get_alias_from_user(&server_store, &project, options.value_of("alias"))?;
+            project.name = get_alias_from_user(&server_store, &project, alias)?;
 
-            let start_command = get_start_command_from_user(
-                &project,
-                options.value_of("start-script"),
-                "Pick a start script",
-            )?;
+            let start_command =
+                get_start_command_from_user(&project, start_script, "Pick a start script")?;
             server_store.add_server(&project, start_command)
         }
-        Some("edit") => {
+
+        Cli::Edit {
+            server,
+            start_script,
+            force,
+        } => {
             let server_store = load_store()?;
-            let options = matches.subcommand_matches("edit").unwrap();
-            let server = get_existing_server_from_user(
-                &server_store,
-                options.value_of("server"),
-                "Pick a server to edit",
-            )?;
+            let server =
+                get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
             let project = Project::from_path(server.get_project_dir())?;
-            let start_command = get_start_command_from_user(
-                &project,
-                options.value_of("start-script"),
-                "Pick a new start script",
-            )?;
+            let start_command =
+                get_start_command_from_user(&project, start_script, "Pick a new start script")?;
             if get_confirmation_from_user(
-                options.is_present("force"),
+                force,
                 "Are you sure you want to change the server's start script?",
             )? {
                 server_store.set_server_start_command(&server.name, start_command)
@@ -259,34 +173,26 @@ fn run() -> Result<(), ApplicationError> {
                 Ok(())
             }
         }
-        Some("run") => {
+
+        Cli::Run { server } => {
             let server_store = load_store()?;
-            let options = matches.subcommand_matches("run").unwrap();
-            let server = get_existing_server_from_user(
-                &server_store,
-                options.value_of("server"),
-                "Pick a server to run",
-            )?;
+            let server =
+                get_existing_server_from_user(&server_store, server, "Pick a server to run")?;
             server_store.start_server(&server.name)
         }
-        Some("remove") => {
+
+        Cli::Remove { server, force } => {
             let server_store = load_store()?;
-            let options = matches.subcommand_matches("remove").unwrap();
-            let server = get_existing_server_from_user(
-                &server_store,
-                options.value_of("server"),
-                "Pick a server to remove",
-            )?;
-            if get_confirmation_from_user(
-                options.is_present("force"),
-                "Are you sure you want to remove the server?",
-            )? {
+            let server =
+                get_existing_server_from_user(&server_store, server, "Pick a server to remove")?;
+            if get_confirmation_from_user(force, "Are you sure you want to remove the server?")? {
                 server_store.remove_server(&server.name)
             } else {
                 Ok(())
             }
         }
-        Some("list") => {
+
+        Cli::List => {
             let server_store = load_store()?;
             println!("{}", "Servers:".bold());
             server_store.get_all().iter().for_each(|server| {
@@ -298,8 +204,8 @@ fn run() -> Result<(), ApplicationError> {
             });
             Ok(())
         }
-        Some(command) => Err(ApplicationError::InvalidCommand(command.to_string())),
-        None => panic!("No command specified"),
+
+        Cli::Unknown(args) => Err(ApplicationError::InvalidCommand(args[0].clone())),
     }
 }
 
@@ -359,7 +265,9 @@ fn main() {
                     corpus.add_text("edit");
                     corpus.add_text("run");
                     corpus.add_text("remove");
+                    corpus.add_text("rm");
                     corpus.add_text("list");
+                    corpus.add_text("ls");
                     let results = corpus.search(command.as_str(), 0.5f32);
                     Some(match results.first() {
                         Some(result) => format!("Did you mean `{}`?", format!("server-room {}", result.text).bold().cyan()),
