@@ -20,7 +20,7 @@ use structopt::StructOpt;
 
 // Return the path to the server store file
 fn get_store_path() -> Result<PathBuf, ApplicationError> {
-    let project_dirs = ProjectDirs::from("com", "Canac Apps", "Server Room")
+    let project_dirs = ProjectDirs::from("com", "github.canac", "server-room")
         .ok_or(ApplicationError::ProjectDirs)?;
     Ok(project_dirs.data_dir().join(PathBuf::from("servers.toml")))
 }
