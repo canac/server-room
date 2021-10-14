@@ -25,6 +25,7 @@ pub fn choose_server<'s>(
                     .partial_cmp(&server2.get_weight())
                     .unwrap_or(std::cmp::Ordering::Equal)
                     .reverse()
+                    .then_with(|| server1.name.cmp(&server2.name))
             });
 
             if servers.is_empty() {
