@@ -1,6 +1,7 @@
 mod cli;
 mod error;
 mod project;
+mod prompt;
 mod script;
 mod server;
 mod server_store;
@@ -8,90 +9,14 @@ mod server_store;
 use cli::Cli;
 use error::ApplicationError;
 use project::Project;
-use server::Server;
 use server_store::ServerStore;
 
 use colored::*;
 use directories::ProjectDirs;
-use inquire::{Confirm, Select, Text};
 use ngrammatic::CorpusBuilder;
-use std::collections::HashSet;
 use std::fs;
-use std::iter::FromIterator;
 use std::path::PathBuf;
 use structopt::StructOpt;
-
-// Get an existing server from the command line argument, falling back to letting the user interactively pick one
-fn get_existing_server_from_user<'s>(
-    server_store: &'s ServerStore,
-    cli_server_name: Option<String>,
-    prompt: &str,
-) -> Result<&'s Server, ApplicationError> {
-    match cli_server_name {
-        Some(server_name) => server_store.get_one(server_name.as_str()),
-        None => {
-            // If no server was provided, let the user pick one
-            let mut servers = server_store.get_all();
-            // Put the servers with the highest weight first
-            servers.sort_by(|server1, server2| {
-                server1
-                    .get_weight()
-                    .partial_cmp(&server2.get_weight())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .reverse()
-            });
-
-            if servers.is_empty() {
-                return Err(ApplicationError::NoServers);
-            }
-
-            Select::new(prompt, servers)
-                .prompt()
-                .map_err(ApplicationError::from)
-        }
-    }
-}
-
-// Get the start command from the script name command line argument, falling back to letting the user interactively pick one
-fn get_start_command_from_user(
-    project: &Project,
-    cli_start_script: Option<String>,
-    prompt: &str,
-) -> Result<String, ApplicationError> {
-    let start_script = match cli_start_script {
-        Some(start_script) => {
-            // If a start script name was provided from the command line, validate it
-            project.get_start_script(start_script)?
-        }
-        None => {
-            // If no start script was provided, let the user pick one
-            let mut scripts = project.get_start_scripts()?;
-            let priority_scripts = HashSet::<&&str>::from_iter(["dev", "run", "start"].iter());
-            // Sort the scripts by name, but put priority scripts first
-            scripts.sort_by(|script1, script2| {
-                priority_scripts
-                    .contains(&script1.name.as_str())
-                    .cmp(&priority_scripts.contains(&script2.name.as_str()))
-                    .reverse()
-                    .then_with(|| script1.name.cmp(&script2.name))
-            });
-            Select::new(prompt, scripts).prompt()?
-        }
-    };
-    Ok(format!("npm run {}", start_script.name))
-}
-
-// Get confirmation to perform the operation from command line argument, falling back to prompting the user for confirmation
-fn get_confirmation_from_user(cli_confirm: bool, prompt: &str) -> Result<bool, ApplicationError> {
-    if cli_confirm {
-        Ok(true)
-    } else {
-        Ok(Confirm::new(prompt)
-            .with_default(false)
-            .prompt_skippable()?
-            .unwrap_or(false))
-    }
-}
 
 // Return the path to the server store file
 fn get_store_path() -> Result<PathBuf, ApplicationError> {
@@ -127,7 +52,7 @@ fn run() -> Result<(), ApplicationError> {
             server_store.validate_new_project(&project)?;
 
             let start_command =
-                get_start_command_from_user(&project, start_script, "Pick a start script")?;
+                prompt::choose_start_command(&project, start_script, "Pick a start script")?;
             server_store.add_server(&project, start_command)
         }
 
@@ -138,21 +63,10 @@ fn run() -> Result<(), ApplicationError> {
                 force,
             } => {
                 let server_store = load_store()?;
-                let server =
-                    get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
-
-                let new_name = match name {
-                    None => Text::new("Pick a new name for the server")
-                        .with_placeholder(server.name.as_str())
-                        .prompt()
-                        .map_err(ApplicationError::InquireError)?,
-                    Some(name) => name,
-                };
-
-                if get_confirmation_from_user(
-                    force,
-                    "Are you sure you want to change the server's name?",
-                )? {
+                let server = prompt::choose_server(&server_store, server, "Pick a server to edit")?;
+                let new_name =
+                    prompt::choose_server_new_name(server, name, "Pick a new name for the server")?;
+                if prompt::confirm(force, "Are you sure you want to change the server's name?")? {
                     server_store.set_server_name(&server.name, new_name)?;
                 }
 
@@ -165,14 +79,16 @@ fn run() -> Result<(), ApplicationError> {
                 force,
             } => {
                 let server_store = load_store()?;
-                let server =
-                    get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
+                let server = prompt::choose_server(&server_store, server, "Pick a server to edit")?;
                 let project = Project::from_path(server.get_project_dir())?;
 
-                let new_start_script =
-                    get_start_command_from_user(&project, start_script, "Pick a new start script")?;
+                let new_start_script = prompt::choose_start_command(
+                    &project,
+                    start_script,
+                    "Pick a new start script",
+                )?;
 
-                if get_confirmation_from_user(
+                if prompt::confirm(
                     force,
                     "Are you sure you want to change the server's start script?",
                 )? {
@@ -185,16 +101,14 @@ fn run() -> Result<(), ApplicationError> {
 
         Cli::Run { server } => {
             let server_store = load_store()?;
-            let server =
-                get_existing_server_from_user(&server_store, server, "Pick a server to run")?;
+            let server = prompt::choose_server(&server_store, server, "Pick a server to run")?;
             server_store.start_server(&server.name)
         }
 
         Cli::Remove { server, force } => {
             let server_store = load_store()?;
-            let server =
-                get_existing_server_from_user(&server_store, server, "Pick a server to remove")?;
-            if get_confirmation_from_user(force, "Are you sure you want to remove the server?")? {
+            let server = prompt::choose_server(&server_store, server, "Pick a server to remove")?;
+            if prompt::confirm(force, "Are you sure you want to remove the server?")? {
                 server_store.remove_server(&server.name)
             } else {
                 Ok(())
