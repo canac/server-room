@@ -35,6 +35,9 @@ pub enum ApplicationError {
     #[error("Server \"{0}\" don't exist")]
     NonExistentServer(String),
 
+    #[error("Server name cannot be empty")]
+    EmptyServerName,
+
     #[error("Server with name \"{0}\" already exists")]
     DuplicateServerName(String),
 

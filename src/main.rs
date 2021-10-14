@@ -13,7 +13,7 @@ use server_store::ServerStore;
 
 use colored::*;
 use directories::ProjectDirs;
-use inquire::{Confirm, Select};
+use inquire::{Confirm, Select, Text};
 use ngrammatic::CorpusBuilder;
 use std::collections::HashSet;
 use std::fs;
@@ -61,8 +61,7 @@ fn get_start_command_from_user(
     let start_script = match cli_start_script {
         Some(start_script) => {
             // If a start script name was provided from the command line, validate it
-            project.validate_start_script(start_script.as_str())?;
-            start_script
+            project.get_start_script(start_script)?
         }
         None => {
             // If no start script was provided, let the user pick one
@@ -76,11 +75,10 @@ fn get_start_command_from_user(
                     .reverse()
                     .then_with(|| script1.name.cmp(&script2.name))
             });
-            let start_script = Select::new(prompt, scripts).prompt()?;
-            start_script.name
+            Select::new(prompt, scripts).prompt()?
         }
     };
-    Ok(format!("npm run {}", start_script))
+    Ok(format!("npm run {}", start_script.name))
 }
 
 // Get confirmation to perform the operation from command line argument, falling back to prompting the user for confirmation
@@ -133,26 +131,57 @@ fn run() -> Result<(), ApplicationError> {
             server_store.add_server(&project, start_command)
         }
 
-        Cli::Edit {
-            server,
-            start_script,
-            force,
-        } => {
-            let server_store = load_store()?;
-            let server =
-                get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
-            let project = Project::from_path(server.get_project_dir())?;
-            let start_command =
-                get_start_command_from_user(&project, start_script, "Pick a new start script")?;
-            if get_confirmation_from_user(
+        Cli::Edit(edit) => match edit {
+            cli::Edit::Name {
+                server,
+                name,
                 force,
-                "Are you sure you want to change the server's start script?",
-            )? {
-                server_store.set_server_start_command(&server.name, start_command)
-            } else {
+            } => {
+                let server_store = load_store()?;
+                let server =
+                    get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
+
+                let new_name = match name {
+                    None => Text::new("Pick a new name for the server")
+                        .with_placeholder(server.name.as_str())
+                        .prompt()
+                        .map_err(ApplicationError::InquireError)?,
+                    Some(name) => name,
+                };
+
+                if get_confirmation_from_user(
+                    force,
+                    "Are you sure you want to change the server's name?",
+                )? {
+                    server_store.set_server_name(&server.name, new_name)?;
+                }
+
                 Ok(())
             }
-        }
+
+            cli::Edit::StartScript {
+                server,
+                start_script,
+                force,
+            } => {
+                let server_store = load_store()?;
+                let server =
+                    get_existing_server_from_user(&server_store, server, "Pick a server to edit")?;
+                let project = Project::from_path(server.get_project_dir())?;
+
+                let new_start_script =
+                    get_start_command_from_user(&project, start_script, "Pick a new start script")?;
+
+                if get_confirmation_from_user(
+                    force,
+                    "Are you sure you want to change the server's start script?",
+                )? {
+                    server_store.set_server_start_command(&server.name, new_start_script)?;
+                }
+
+                Ok(())
+            }
+        },
 
         Cli::Run { server } => {
             let server_store = load_store()?;
@@ -232,6 +261,7 @@ fn main() {
                         None => "Try a different server name.".to_string(),
                     })
                 },
+                ApplicationError::EmptyServerName => Some(format!("Try providing a non-empty server name with `{}`", "--name".bold().cyan())),
                 ApplicationError::DuplicateServerName(_) => Some(format!("Try giving the new server a unique name with `{}`", "--name".bold().cyan())),
                 ApplicationError::DuplicateServerDir { existing, .. } => Some(format!(
                     "Try editing the existing server instead.\n\n    {}",

@@ -75,16 +75,15 @@ impl Project {
     }
 
     // Determine whether the start script for a project is valid
-    pub fn validate_start_script(&self, start_script: &str) -> Result<(), ApplicationError> {
+    pub fn get_start_script(&self, start_script: String) -> Result<Script, ApplicationError> {
         let scripts = self.get_start_scripts()?;
-        if !scripts.iter().any(|script| script.name == start_script) {
-            return Err(ApplicationError::NonExistentScript {
+        scripts
+            .into_iter()
+            .find(|script| script.name == start_script)
+            .ok_or_else(|| ApplicationError::NonExistentScript {
                 project: self.clone(),
                 script: start_script.to_string(),
-            });
-        }
-
-        Ok(())
+            })
     }
 
     // Return the path to the project's package.json file

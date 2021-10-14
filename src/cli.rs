@@ -3,6 +3,31 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
+pub enum Edit {
+    Name {
+        #[structopt(short, long, about = "Specifies the server to edit")]
+        server: Option<String>,
+        #[structopt(long, requires = "server", about = "Specifies the server's new name")]
+        name: Option<String>,
+        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        force: bool,
+    },
+
+    StartScript {
+        #[structopt(short, long, about = "Specifies the server to edit")]
+        server: Option<String>,
+        #[structopt(
+            long,
+            requires = "server",
+            about = "Specifies the server's new start script"
+        )]
+        start_script: Option<String>,
+        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        force: bool,
+    },
+}
+
+#[derive(StructOpt)]
 #[structopt(
     name = "server-room",
     about = "Runs dev servers",
@@ -23,24 +48,8 @@ pub enum Cli {
         start_script: Option<String>,
     },
 
-    #[structopt(about = "Changes a server's start script")]
-    Edit {
-        #[structopt(short, long, about = "Specifies the server to edit")]
-        server: Option<String>,
-        #[structopt(
-            long,
-            requires = "server",
-            about = "Specifies the server's new start script"
-        )]
-        start_script: Option<String>,
-        #[structopt(
-            short,
-            long,
-            requires = "start_script",
-            about = "Don't prompt for confirmation"
-        )]
-        force: bool,
-    },
+    #[structopt(about = "Changes a server's definition")]
+    Edit(Edit),
 
     #[structopt(about = "Runs a server")]
     Run {

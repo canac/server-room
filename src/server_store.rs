@@ -97,6 +97,26 @@ impl ServerStore {
         Ok(())
     }
 
+    // Permanently set the name of the specified server
+    pub fn set_server_name(
+        &self,
+        server_name: &str,
+        new_name: String,
+    ) -> Result<(), ApplicationError> {
+        if new_name.is_empty() {
+            return Err(ApplicationError::EmptyServerName);
+        }
+
+        if self.servers.contains_key(&new_name) {
+            return Err(ApplicationError::DuplicateServerName(new_name));
+        }
+
+        let mut new_store = self.clone();
+        let server = new_store.get_one_mut(server_name)?;
+        server.name = new_name;
+        new_store.flush()
+    }
+
     // Permanently set the start command of the specified server
     pub fn set_server_start_command(
         &self,
