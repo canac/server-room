@@ -31,12 +31,11 @@ impl Project {
             name,
             dir: project_path,
         };
-        let package_json_path = project.get_package_json();
-        let metadata = fs::metadata(&package_json_path)
-            .map_err(|_| ApplicationError::ReadPackageJson(package_json_path.clone()))?;
+        let metadata = fs::metadata(project.get_package_json())
+            .map_err(|_| ApplicationError::ReadPackageJson(project.clone()))?;
 
         if !metadata.is_file() {
-            return Err(ApplicationError::ReadPackageJson(package_json_path));
+            return Err(ApplicationError::ReadPackageJson(project));
         }
 
         Ok(project)
@@ -46,7 +45,7 @@ impl Project {
     pub fn get_start_scripts(&self) -> Result<Vec<Script>, ApplicationError> {
         let package_json_path = self.get_package_json();
         let package_json_content = fs::read_to_string(&package_json_path)
-            .map_err(|_| ApplicationError::ReadPackageJson(package_json_path.clone()))?;
+            .map_err(|_| ApplicationError::ReadPackageJson(self.clone()))?;
         let package_json: Value = serde_json::from_str(&package_json_content).map_err(|_| {
             ApplicationError::MalformedPackageJson {
                 path: package_json_path.clone(),

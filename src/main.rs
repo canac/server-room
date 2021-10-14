@@ -147,7 +147,7 @@ fn main() {
                 ApplicationError::WriteStore(_) => Some("Make sure that the server store file is writable.".to_string()),
                 ApplicationError::ParseStore(_) => Some("Make sure that the server store file contains valid TOML.".to_string()),
                 ApplicationError::StringifyStore => None,
-                ApplicationError::ReadPackageJson(servers_dir) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", servers_dir)),
+                ApplicationError::ReadPackageJson(project) => Some(format!("Try creating a new npm project in this project directory.\n\n    cd {:?}\n    npm init", project.dir)),
                 ApplicationError::MalformedPackageJson { .. } => Some("Try making sure that your package.json contains valid JSON and that the \"scripts\" property is an object with at least one key. For example:\n\n    \"scripts\": {\n        \"start\": \"node app.js\"\n    }".to_string()),
                 ApplicationError::ParsePath(_) => None,
                 ApplicationError::NonExistentScript {

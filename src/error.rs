@@ -17,8 +17,8 @@ pub enum ApplicationError {
     #[error("Couldn't stringify server store")]
     StringifyStore,
 
-    #[error("Could not read file \"{0}\"")]
-    ReadPackageJson(PathBuf),
+    #[error("Could not read file {:?}", .0.get_package_json())]
+    ReadPackageJson(Project),
 
     #[error("Malformed package.json file \"{path}\": {cause}")]
     MalformedPackageJson { path: PathBuf, cause: String },
@@ -26,7 +26,7 @@ pub enum ApplicationError {
     #[error("Couldn't parse path \"{0}\"")]
     ParsePath(PathBuf),
 
-    #[error("Script \"{script}\" doesn't exist in \"{:?}\"", .project.get_package_json())]
+    #[error("Script \"{script}\" doesn't exist in {:?}", .project.get_package_json())]
     NonExistentScript { project: Project, script: String },
 
     #[error("Couldn't execute command \"{0}\"")]
