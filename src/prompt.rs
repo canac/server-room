@@ -100,7 +100,7 @@ pub fn confirm(cli_confirm: bool, prompt: &str) -> Result<bool, ApplicationError
         Ok(true)
     } else {
         Ok(Confirm::new(prompt)
-            .with_default(false)
+            .with_default(true)
             .prompt_skippable()?
             .unwrap_or(false))
     }
