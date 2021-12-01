@@ -51,8 +51,11 @@ fn run() -> Result<(), ApplicationError> {
             // Abort if the project is invalid before prompting the user for the start command
             server_store.validate_new_project(&project)?;
 
-            let start_command =
-                prompt::choose_start_command(&project, start_script, "Pick a start script")?;
+            let start_command = prompt::choose_start_command(
+                &project,
+                start_script,
+                "Which npm script starts the server?",
+            )?;
             server_store.add_server(&project, start_command)
         }
 
@@ -63,9 +66,13 @@ fn run() -> Result<(), ApplicationError> {
                 force,
             } => {
                 let server_store = load_store()?;
-                let server = prompt::choose_server(&server_store, server, "Pick a server to edit")?;
+                let server = prompt::choose_server(
+                    &server_store,
+                    server,
+                    "Which server do you want to edit?",
+                )?;
                 let new_name =
-                    prompt::choose_server_new_name(server, name, "Pick a new name for the server")?;
+                    prompt::choose_server_new_name(server, name, "What is the server's new name?")?;
                 if prompt::confirm(force, "Are you sure you want to change the server's name?")? {
                     server_store.set_server_name(&server.name, new_name)?;
                 }
@@ -79,13 +86,17 @@ fn run() -> Result<(), ApplicationError> {
                 force,
             } => {
                 let server_store = load_store()?;
-                let server = prompt::choose_server(&server_store, server, "Pick a server to edit")?;
+                let server = prompt::choose_server(
+                    &server_store,
+                    server,
+                    "Which server do you want to edit?",
+                )?;
                 let project = Project::from_path(server.get_project_dir())?;
 
                 let new_start_script = prompt::choose_start_command(
                     &project,
                     start_script,
-                    "Pick a new start script",
+                    "Which npm script starts the server?",
                 )?;
 
                 if prompt::confirm(
@@ -101,13 +112,18 @@ fn run() -> Result<(), ApplicationError> {
 
         Cli::Run { server } => {
             let server_store = load_store()?;
-            let server = prompt::choose_server(&server_store, server, "Pick a server to run")?;
+            let server =
+                prompt::choose_server(&server_store, server, "Which server do you want to run?")?;
             server_store.start_server(&server.name)
         }
 
         Cli::Remove { server, force } => {
             let server_store = load_store()?;
-            let server = prompt::choose_server(&server_store, server, "Pick a server to remove")?;
+            let server = prompt::choose_server(
+                &server_store,
+                server,
+                "Which server do you want to remove?",
+            )?;
             if prompt::confirm(force, "Are you sure you want to remove the server?")? {
                 server_store.remove_server(&server.name)
             } else {
