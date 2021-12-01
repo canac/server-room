@@ -84,6 +84,9 @@ pub enum Cli {
     #[structopt(alias = "ls", about = "Displays all servers")]
     List,
 
+    #[structopt(about = "Generates a Caddyfile")]
+    Caddy,
+
     #[structopt(external_subcommand)]
     Unknown(Vec<String>),
 }

@@ -165,6 +165,19 @@ fn run() -> Result<(), ApplicationError> {
             Ok(())
         }
 
+        Cli::Caddy => {
+            let server_store = load_store()?;
+            let mut servers = server_store.get_all();
+            servers.sort_by_key(|server| server.name.as_str());
+            servers.iter().for_each(|server| {
+                println!(
+                    "{}.localhost {{ reverse_proxy: 127.0.0.1:{} }}",
+                    server.name, server.port
+                )
+            });
+            Ok(())
+        }
+
         Cli::Unknown(args) => Err(ApplicationError::InvalidCommand(args[0].clone())),
     }
 }
@@ -230,6 +243,7 @@ fn main() {
                     corpus.add_text("rm");
                     corpus.add_text("list");
                     corpus.add_text("ls");
+                    corpus.add_text("caddy");
                     let results = corpus.search(command.as_str(), 0.5f32);
                     Some(match results.first() {
                         Some(result) => format!("Did you mean `{}`?", format!("server-room {}", result.text).bold().cyan()),
