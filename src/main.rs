@@ -37,6 +37,7 @@ fn run() -> Result<(), ApplicationError> {
             path,
             name,
             start_script,
+            port,
         } => {
             let server_store = load_store()?;
             let absolute_path =
@@ -56,7 +57,8 @@ fn run() -> Result<(), ApplicationError> {
                 start_script,
                 "Which npm script starts the server?",
             )?;
-            server_store.add_server(&project, start_command)
+            let port = prompt::choose_port(port, "What port does the server listen on?")?;
+            server_store.add_server(&project, start_command, port)
         }
 
         Cli::Edit(edit) => match edit {
@@ -104,6 +106,25 @@ fn run() -> Result<(), ApplicationError> {
                     "Are you sure you want to change the server's start script?",
                 )? {
                     server_store.set_server_start_command(&server.name, new_start_script)?;
+                }
+
+                Ok(())
+            }
+
+            cli::Edit::Port {
+                server,
+                port,
+                force,
+            } => {
+                let server_store = load_store()?;
+                let server = prompt::choose_server(
+                    &server_store,
+                    server,
+                    "Which server do you want to edit?",
+                )?;
+                let new_port = prompt::choose_port(port, "What port does the server listen on?")?;
+                if prompt::confirm(force, "Are you sure you want to change the server's port?")? {
+                    server_store.set_server_port(&server.name, new_port)?;
                 }
 
                 Ok(())

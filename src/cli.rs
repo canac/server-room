@@ -25,6 +25,15 @@ pub enum Edit {
         #[structopt(short, long, about = "Don't prompt for confirmation")]
         force: bool,
     },
+
+    Port {
+        #[structopt(short, long, about = "Specifies the server to edit")]
+        server: Option<String>,
+        #[structopt(long, requires = "server", about = "Specifies the server's new port")]
+        port: Option<u16>,
+        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        force: bool,
+    },
 }
 
 #[derive(StructOpt)]
@@ -46,6 +55,8 @@ pub enum Cli {
         name: Option<String>,
         #[structopt(short, long, about = "Specifies the new server's start script")]
         start_script: Option<String>,
+        #[structopt(long, about = "Specifies the new server's port")]
+        port: Option<u16>,
     },
 
     #[structopt(about = "Changes a server's definition")]

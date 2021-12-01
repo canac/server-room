@@ -3,7 +3,7 @@ use super::project::Project;
 use super::server::Server;
 use super::server_store::ServerStore;
 
-use inquire::{Confirm, Select, Text};
+use inquire::{Confirm, CustomType, Select, Text};
 use std::collections::HashSet;
 use std::iter::FromIterator;
 
@@ -78,6 +78,17 @@ pub fn choose_server_new_name(
         Some(new_name) => Ok(new_name),
         None => Text::new(prompt)
             .with_placeholder(server.name.as_str())
+            .prompt()
+            .map_err(ApplicationError::InquireError),
+    }
+}
+
+// Get the port for a server from the command line argument, falling back to letting the user choose one
+pub fn choose_port(cli_port: Option<u16>, prompt: &str) -> Result<u16, ApplicationError> {
+    match cli_port {
+        Some(port) => Ok(port),
+        None => CustomType::<u16>::new(prompt)
+            .with_error_message("Please enter a valid port number")
             .prompt()
             .map_err(ApplicationError::InquireError),
     }

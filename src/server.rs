@@ -11,6 +11,7 @@ pub struct Server {
     pub name: String,
     pub dir: PathBuf,
     pub start_command: String,
+    pub port: u16,
     pub frecency: f64,
 }
 
@@ -22,18 +23,19 @@ impl fmt::Display for Server {
 
 impl Server {
     // Create a new server
-    pub fn new(name: String, dir: PathBuf, start_command: String) -> Self {
+    pub fn new(name: String, dir: PathBuf, start_command: String, port: u16) -> Self {
         Server {
             name,
             dir,
             start_command,
+            port,
             frecency: 0f64,
         }
     }
 
     // Create a new server from a project
-    pub fn from_project(project: Project, start_command: String) -> Self {
-        Self::new(project.name, project.dir, start_command)
+    pub fn from_project(project: Project, start_command: String, port: u16) -> Self {
+        Self::new(project.name, project.dir, start_command, port)
     }
 
     // Calculate the likelihood that this server will be used again

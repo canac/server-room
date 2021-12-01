@@ -66,12 +66,13 @@ impl ServerStore {
         &self,
         project: &Project,
         start_command: String,
+        port: u16,
     ) -> Result<(), ApplicationError> {
         // Don't add the project if it doesn't validate
         self.validate_new_project(project)?;
 
         let mut new_store = self.clone();
-        let server = Server::from_project(project.clone(), start_command);
+        let server = Server::from_project(project.clone(), start_command, port);
         new_store.servers.insert(project.name.clone(), server);
         new_store.flush()
     }
@@ -126,6 +127,14 @@ impl ServerStore {
         let mut new_store = self.clone();
         let server = new_store.get_one_mut(server_name)?;
         server.start_command = start_command;
+        new_store.flush()
+    }
+
+    // Permanently set the port of the specified server
+    pub fn set_server_port(&self, server_name: &str, port: u16) -> Result<(), ApplicationError> {
+        let mut new_store = self.clone();
+        let server = new_store.get_one_mut(server_name)?;
+        server.port = port;
         new_store.flush()
     }
 
