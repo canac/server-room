@@ -11,12 +11,12 @@ use error::ApplicationError;
 use project::Project;
 use server_store::ServerStore;
 
+use clap::StructOpt;
 use colored::*;
 use directories::ProjectDirs;
 use ngrammatic::CorpusBuilder;
 use std::fs;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 // Return the path to the server store file
 fn get_store_path() -> Result<PathBuf, ApplicationError> {
@@ -26,7 +26,7 @@ fn get_store_path() -> Result<PathBuf, ApplicationError> {
 }
 
 fn run() -> Result<(), ApplicationError> {
-    let cli = Cli::from_args();
+    let cli = Cli::parse();
     match cli {
         Cli::Config => {
             println!("Server store path: {:?}", get_store_path()?);

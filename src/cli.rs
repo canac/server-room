@@ -1,92 +1,99 @@
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use structopt::StructOpt;
-
-#[derive(StructOpt)]
+#[derive(Subcommand)]
 pub enum Edit {
+    /// Edit the server's name
     Name {
-        #[structopt(short, long, about = "Specifies the server to edit")]
+        /// Specifies the server to edit
+        #[clap(short, long)]
         server: Option<String>,
-        #[structopt(long, requires = "server", about = "Specifies the server's new name")]
+        /// Specifies the server's new name
+        #[clap(long, requires = "server")]
         name: Option<String>,
-        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        /// Don't prompt for confirmation
+        #[clap(short, long)]
         force: bool,
     },
 
+    /// Edit the server's start script
     StartScript {
-        #[structopt(short, long, about = "Specifies the server to edit")]
+        /// Specifies the server to edit
+        #[clap(short, long)]
         server: Option<String>,
-        #[structopt(
-            long,
-            requires = "server",
-            about = "Specifies the server's new start script"
-        )]
+        /// Specifies the server's new start script
+        #[clap(long, requires = "server")]
         start_script: Option<String>,
-        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        /// Don't prompt for confirmation,
+        #[clap(short, long)]
         force: bool,
     },
 
+    /// Edit the server's port
     Port {
-        #[structopt(short, long, about = "Specifies the server to edit")]
+        /// Specifies the server to edit
+        #[clap(short, long)]
         server: Option<String>,
-        #[structopt(long, requires = "server", about = "Specifies the server's new port")]
+        /// Specifies the server's new port
+        #[clap(long, requires = "server")]
         port: Option<u16>,
-        #[structopt(short, long, about = "Don't prompt for confirmation")]
+        /// Don't prompt for confirmation
+        #[clap(short, long)]
         force: bool,
     },
 }
 
-#[derive(StructOpt)]
-#[structopt(
-    name = "server-room",
-    about = "Runs dev servers",
-    version = "0.1.0",
-    author = "Caleb Cox"
-)]
+#[derive(Parser)]
+#[clap(about, version, author)]
 pub enum Cli {
-    #[structopt(about = "Displays configuration")]
+    /// Displays configuration
     Config,
 
-    #[structopt(about = "Adds a new server")]
+    /// Adds a new server
     Add {
-        #[structopt(parse(from_os_str), about = "Specifies the project path")]
+        /// Specifies the project path
+        #[clap(parse(from_os_str))]
         path: PathBuf,
-        #[structopt(short, long, about = "Specifies the project name")]
+        /// Specifies the project name
+        #[clap(short, long)]
         name: Option<String>,
-        #[structopt(short, long, about = "Specifies the new server's start script")]
+        /// Specifies the new server's start script
+        #[clap(short, long)]
         start_script: Option<String>,
-        #[structopt(long, about = "Specifies the new server's port")]
+        /// Specifies the new server's port
+        #[clap(long, requires = "server")]
         port: Option<u16>,
     },
 
-    #[structopt(about = "Changes a server's definition")]
+    /// Changes a server's definition
+    #[clap(subcommand)]
     Edit(Edit),
 
-    #[structopt(about = "Runs a server")]
+    /// Runs a server
     Run {
-        #[structopt(short, long, about = "Specifies the server to run")]
+        /// Specifies the server to run
+        #[clap(short, long)]
         server: Option<String>,
     },
 
-    #[structopt(alias = "rm", about = "Removes a server")]
+    /// Removes a server
+    #[clap(alias = "rm")]
     Remove {
-        #[structopt(short, long, about = "Specifies the server to remove")]
+        /// Specifies the server to remove
+        #[clap(short, long)]
         server: Option<String>,
-        #[structopt(
-            short,
-            long,
-            requires = "server",
-            about = "Don't prompt for confirmation"
-        )]
+        /// Don't prompt for confirmation
+        #[clap(short, long, requires = "server")]
         force: bool,
     },
 
-    #[structopt(alias = "ls", about = "Displays all servers")]
+    /// Displays all servers
+    #[clap(alias = "ls")]
     List,
 
-    #[structopt(about = "Generates a Caddyfile")]
+    /// Generates a Caddyfile
     Caddy,
 
-    #[structopt(external_subcommand)]
+    #[clap(external_subcommand)]
     Unknown(Vec<String>),
 }
