@@ -145,7 +145,7 @@ impl ServerStore {
 
         // Uses the frecency algorithm described here https://wiki.mozilla.org/User:Jesse/NewFrecency
         const FRECENCY_HALF_LIFE_MICROS: f64 = 30f64 * 24f64 * 60f64 * 60f64 * 1_000_000f64; // one month
-        const DECAY: f64 = LN_2 / FRECENCY_HALF_LIFE_MICROS as f64;
+        const DECAY: f64 = LN_2 / FRECENCY_HALF_LIFE_MICROS;
         const SCORE_INCREASE_PER_RUN: f64 = 1f64;
         let now_decay = SystemTime::now()
             .duration_since(UNIX_EPOCH)
