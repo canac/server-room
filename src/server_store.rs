@@ -141,7 +141,7 @@ impl ServerStore {
     // Permanently record a new start time
     pub fn start_server(&self, server_name: &str) -> Result<(), ApplicationError> {
         let mut new_store = self.clone();
-        let mut server = new_store.get_one_mut(server_name)?;
+        let server = new_store.get_one_mut(server_name)?;
 
         // Uses the frecency algorithm described here https://wiki.mozilla.org/User:Jesse/NewFrecency
         const FRECENCY_HALF_LIFE_MICROS: f64 = 30f64 * 24f64 * 60f64 * 60f64 * 1_000_000f64; // one month
